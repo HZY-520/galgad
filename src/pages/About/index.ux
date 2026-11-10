@@ -1,0 +1,494 @@
+<script>
+/**
+ * 关于页（About）：正文 + 两个隐藏彩蛋。
+ *
+ * 移植自 galgod-band（小米手环 9 Pro / Vela 版）pages/about/about.ux：
+ *  - Vela 的 router / prompt 全部换成 @blueos.*；protected -> data；移除全部滑动拦截；
+ *  - 副标题按目标端改写为「GalGod · vivo 蓝河手表移植版 · v{{ver}}」，
+ *    APP_VER 必须与 src/manifest.json 的 versionName 一致（1.0.0，validate-pages 会核对）；
+ *  - ABOUT（37 项：故事梗概 / 四种结局 / 版权信息 / 开源协议）与 FISH_LINES
+ *    （30 条小鱼干台词）逐字保留，只把排版参数按 466 设计宽重算：
+ *      正文可用宽 300（CPL=15，字号 20、行高 30），用 <list> 固定 30px 行高，
+ *      列表 top 108、圆屏高 278 / 方屏高 368（.lst.square 运行时切换；底边留在
+ *      返回按钮 top 之上，避免列表压住返回按钮）；
+ *      行类型 r-p（正文 #d9cdd6）/ r-s（小节 #ffb3cd）/ r-g（空行，不显示文字）；
+ *      card 内 padding-left 80px（300 宽正文≈居中）。
+ *  - 源工程用 <scroll> 排版长文；BlueOS 不支持可嵌套的滚动容器、scroll 又不支持
+ *    margin/padding，这里改用 <list>（每行固定高度，行数由 wrapText 预先算好）。
+ *  - storage 只在彩蛋动作里调用（markCleared / saveSeen），onInit 不碰 feature API。
+ *
+ * 彩蛋 1：2 秒内连点「关于」标题 7 次 → 隐藏菜单（解锁后日谈 / 解锁全部 CG /
+ *         小鱼干 / 关闭）；第 4 次起标题右侧显示 · / ·· / ··· 提示。
+ * 彩蛋 2：小鱼干小剧场——全屏黑底纯文字，点一下走一句，走完回彩蛋菜单。
+ */
+import router from '@blueos.app.appmanager.router'
+import prompt from '@blueos.window.prompt'
+import { wrapText, markCleared, saveSeen } from '../../common/reader.js'
+import { CGG } from '../../common/cglist.js'
+
+// 版本号：必须与 src/manifest.json 的 versionName 完全一致
+const APP_VER = '1.0.0'
+
+// 关于页每行字数：字号 20、可用宽 300 → floor(300/20)=15
+const CPL = 15
+
+// 关于页正文。's' = 小节标题，'p' = 正文，'g' = 空行。
+// 原始段落由 common/reader.js 的 wrapText() 断行，与正文页共用同一套逻辑。
+// 内容为源工程逐字搬运（内容不变量，不要改写）。
+const ABOUT = [
+  ['s', '故事梗概'],
+  ['p', '在一个由「天选试」决定一切的世界里——'],
+  ['p', '国家每三年举办一次天选试，一次录取一千人，考核内容全部是美少女游戏（Galgame）。'],
+  ['p', '通过者握有制定规则、影响国运的权力。万般皆下品，惟有旮旯高。'],
+  ['g', ''],
+  ['p', '主角陈舟是个不折不扣的 Galgame 废萌党。比起上学，他更想打游戏。'],
+  ['g', ''],
+  ['p', '林曦是他的青梅竹马兼「好哥们」，比谁都温柔，却对 Galgame 既无兴趣也无才能。'],
+  ['g', ''],
+  ['p', '江晚晴永远一副尽在掌握的样子，在三人之间斡旋，一步步走向她要的结局。'],
+  ['g', ''],
+  ['p', '还有小涟——只有他能看见的纯白少女，与月光同在。'],
+  ['g', ''],
+  ['p', '在「现实的 Galgame」里，他要面对的不是攻略路线，而是一个必须做出选择的世界。'],
+  ['g', ''],
+  ['s', '结局'],
+  ['p', '真结局 · 这片月幕：登上天选台，拒绝「剧情作」的做法，全选，全都要——创造全员幸福的结局。'],
+  ['g', ''],
+  ['p', '结局 · 二人的世界：退出殿试，婉拒重职，与她们平和地告别。'],
+  ['g', ''],
+  ['p', '结局 · 回归日常：带着温暖的心情活下去，活在一个有你们的世界。'],
+  ['g', ''],
+  ['p', 'Bad End · 未能触碰的世界：省试落选，什么都无所谓了。'],
+  ['g', ''],
+  ['p', '后日谈 · 诺提拉：深夜，刚通关一部 Galgame 的玩家，在家里遇见了自称诺提拉的金瞳少女。'],
+  ['g', ''],
+  ['s', '版权信息'],
+  ['p', '本应用为非官方、非商业性的个人移植作品，与 AstroBox、小米（Xiaomi）均无关联，亦未获其授权或认可。'],
+  ['g', ''],
+  ['p', '剧本文字与全部美术资源（背景 / 立绘 / CG / 标题画）版权归原作 GalGod 及其开发方「诺提拉观察所」所有。'],
+  ['g', ''],
+  ['p', '素材仅用于学习与交流，请勿用于任何商业用途。如有侵权，请联系删除。'],
+  ['g', ''],
+  ['s', '开源协议'],
+  ['p', '本项目代码基于 MIT 协议开源，详见仓库根目录的 LICENSE 文件。'],
+  ['g', ''],
+  ['p', 'Copyright (c) 2026 The GalGod Band Project Contributors'],
+]
+
+// ---- 彩蛋「给 Yui 加小鱼干」的台词 ----
+// 纯文字，不需要图片素材；不进剧本数据、不在主线里出现。n = 说话人（空串=旁白），t = 台词。
+// 源工程共 30 条，逐字保留。
+const FISH_LINES = [
+  { n: '', t: '（口袋里还剩最后一包小鱼干。）' },
+  { n: 'Yui', t: '……（耳朵动了动）' },
+  { n: '我', t: '你盯着我干什么？' },
+  { n: 'Yui', t: '你口袋里有味道。' },
+  { n: '我', t: '你鼻子是雷达吗。' },
+  { n: 'Yui', t: '是。' },
+  { n: '我', t: '……行吧。' },
+  { n: '', t: '（把整包倒了出来。）' },
+  { n: 'Yui', t: '！' },
+  { n: 'Yui', t: '……等一下。' },
+  { n: 'Yui', t: '这个不行。' },
+  { n: '我', t: '啊？' },
+  { n: 'Yui', t: '蛋黄粉太薄了。' },
+  { n: '我', t: '你还挑这个。' },
+  { n: 'Yui', t: '要裹得厚厚的。厚到咬下去，先掉一层粉。' },
+  { n: '我', t: '……' },
+  { n: 'Yui', t: '而且要有星星。' },
+  { n: '我', t: '什么星星。' },
+  { n: 'Yui', t: '会闪的那种。' },
+  { n: '我', t: '小鱼干上为什么会有星星。' },
+  { n: 'Yui', t: '因为那是小鱼干的愿望。' },
+  { n: '我', t: '……' },
+  { n: '我', t: '（默默记下：厚蛋黄粉，带星星闪。）' },
+  { n: 'Yui', t: '记下了？' },
+  { n: '我', t: '记下了。' },
+  { n: 'Yui', t: '那就好。' },
+  { n: 'Yui', t: '今天的评价，给你加一分。' },
+  { n: '我', t: '原来是可以加分的吗。' },
+  { n: 'Yui', t: '看你表现。' },
+  { n: '', t: '（尾巴晃了两下。）' },
+]
+
+/** 页面级非响应式运行时（放模块级避免被响应式代理；页面单实例） */
+const st = {
+  tapCount: 0,
+  lastTap: 0,
+  lockTap: 0,
+}
+
+export default {
+  data: {
+    ver: APP_VER,
+    // 圆屏 / 方屏（watch-square 时列表更高）
+    square: false,
+    rows: [],
+    // 连点 7 次彩蛋
+    dots: '',
+    eggOpen: false,
+    // 小鱼干小剧场
+    fishOpen: false,
+    fishIdx: 0,
+    fishName: '',
+    fishText: '',
+    fishHint: '',
+  },
+
+  onInit() {
+    // 只做纯状态初始化 + 纯文本排版（不涉及 storage / router / prompt）
+    st.tapCount = 0
+    st.lastTap = 0
+    st.lockTap = 0
+    this.square = this.$device && this.$device.deviceType === 'watch-square'
+    this.dots = ''
+    this.eggOpen = false
+    this.fishOpen = false
+    this.fishIdx = 0
+    this.fishName = ''
+    this.fishText = ''
+    this.fishHint = ''
+    this.build()
+  },
+
+  // ---------------------------------------------------------------- 正文排版
+  build() {
+    const rows = []
+    let n = 0
+    for (let i = 0; i < ABOUT.length; i++) {
+      const kind = ABOUT[i][0]
+      const text = ABOUT[i][1]
+      if (kind === 'g') {
+        rows.push({ key: 'r' + n, c: 'r-g', t: '' })
+        n += 1
+        continue
+      }
+      const cls = kind === 's' ? 'r-s' : 'r-p'
+      const parts = wrapText(text, CPL)
+      for (let j = 0; j < parts.length; j++) {
+        rows.push({ key: 'r' + n, c: cls, t: parts[j] })
+        n += 1
+      }
+    }
+    this.rows = rows
+  },
+
+  lock() {
+    st.lockTap = Date.now()
+  },
+
+  // ---------------------------------------------------------------- 彩蛋：连点 7 次
+  tapTitle() {
+    const now = Date.now()
+    if (now - st.lastTap > 2000) st.tapCount = 0
+    st.lastTap = now
+    st.tapCount += 1
+    if (st.tapCount >= 7) {
+      st.tapCount = 0
+      this.dots = ''
+      this.eggOpen = true
+      return
+    }
+    // 从第 4 次开始给提示（· / ·· / ···），否则完全看不出有反应
+    const DOTS = ['', '·', '··', '···']
+    this.dots = st.tapCount >= 4 ? DOTS[Math.min(3, st.tapCount - 3)] : ''
+  },
+
+  closeEgg() {
+    this.lock()
+    this.eggOpen = false
+  },
+
+  // ---------------------------------------------------------------- 彩蛋：小鱼干小剧场
+  openFish() {
+    this.lock()
+    this.eggOpen = false
+    this.fishIdx = 0
+    this.fishOpen = true
+    this.showFishLine()
+  },
+
+  showFishLine() {
+    const l = FISH_LINES[this.fishIdx] || null
+    if (!l) {
+      this.fishOpen = false
+      return
+    }
+    this.fishName = l.n || ''
+    this.fishText = l.t || ''
+    this.fishHint = (this.fishIdx + 1) + ' / ' + FISH_LINES.length
+  },
+
+  tapFish() {
+    this.lock()
+    this.fishIdx += 1
+    if (this.fishIdx >= FISH_LINES.length) {
+      // 走完就回到彩蛋面板，方便再看别的
+      this.fishOpen = false
+      this.eggOpen = true
+      return
+    }
+    this.showFishLine()
+  },
+
+  // ---------------------------------------------------------------- 彩蛋：解锁
+  // 解锁后日谈：写 cleared 标记，章节选择里就会出现「后日谈 · 诺提拉」
+  unlockAfter() {
+    this.lock()
+    this.eggOpen = false
+    markCleared(() => {
+      prompt.showToast({ message: '已解锁「后日谈 · 诺提拉」' })
+    })
+  },
+
+  // 解锁全部 CG：把 cglist.js 里所有出现过的图片下标去重后一次写进 cgSeen
+  unlockCg() {
+    this.lock()
+    this.eggOpen = false
+    const all = []
+    for (let i = 0; i < CGG.length; i++) {
+      const im = CGG[i].im || []
+      for (let j = 0; j < im.length; j++) {
+        if (all.indexOf(im[j]) < 0) all.push(im[j])
+      }
+    }
+    saveSeen(all, () => {
+      prompt.showToast({ message: '已解锁全部 CG（' + all.length + ' 张）' })
+    })
+  },
+
+  back() {
+    this.lock()
+    router.back()
+  },
+}
+</script>
+
+<template>
+  <div class="page">
+    <!-- 彩蛋触发点：2 秒内连点「关于」7 次 -->
+    <text class="title" @click="tapTitle">关于</text>
+    <text class="dots">{{ dots }}</text>
+    <text class="sub">GalGod · vivo 蓝河手表移植版 · v{{ ver }}</text>
+
+    <list class="lst {{ square ? 'square' : '' }}" bounces="true" scrollbar="false">
+      <list-item type="row" class="item" for="{{ rows }}" tid="key">
+        <div class="card">
+          <text class="{{ $item.c }}">{{ $item.t }}</text>
+        </div>
+      </list-item>
+    </list>
+
+    <div class="back" @click="back"><text class="btn-t">返回</text></div>
+
+    <!-- 彩蛋菜单：全屏 scrim + 宽 300 卡片（四个按钮） -->
+    <div class="scrim" if="{{ eggOpen }}"></div>
+    <div class="egg {{ square ? 'square' : '' }}" if="{{ eggOpen }}">
+      <text class="egg-t">？？？</text>
+      <div class="egg-btn" @click="unlockAfter"><text class="egg-bt">解锁 · 后日谈</text></div>
+      <div class="egg-btn" @click="unlockCg"><text class="egg-bt">解锁 · 全部 CG</text></div>
+      <div class="egg-btn" @click="openFish"><text class="egg-bt">小鱼干</text></div>
+      <div class="egg-btn egg-close" @click="closeEgg"><text class="egg-bt">关闭</text></div>
+    </div>
+
+    <!-- 小鱼干小剧场：全屏黑底纯文字，点一下走一句 -->
+    <div class="fish" if="{{ fishOpen }}" @click="tapFish">
+      <text class="fish-n" if="{{ fishName }}">{{ fishName }}</text>
+      <text class="fish-t">{{ fishText }}</text>
+      <text class="fish-h">{{ fishHint }}</text>
+    </div>
+  </div>
+</template>
+
+<style>
+  .page {
+    width: 466px;
+    height: 100%;
+    background-color: #14101a;
+  }
+  .title {
+    position: absolute;
+    left: 0px;
+    top: 30px;
+    width: 466px;
+    height: 38px;
+    line-height: 38px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #ffd8e6;
+    text-align: center;
+    lines: 1;
+  }
+  .dots {
+    position: absolute;
+    left: 322px;
+    top: 74px;
+    width: 70px;
+    height: 24px;
+    line-height: 24px;
+    font-size: 18px;
+    color: #ff9ec4;
+    text-align: left;
+    lines: 1;
+  }
+  .sub {
+    position: absolute;
+    left: 0px;
+    top: 72px;
+    width: 466px;
+    height: 26px;
+    line-height: 26px;
+    font-size: 18px;
+    color: #9c8f9b;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .lst {
+    position: absolute;
+    left: 0px;
+    top: 108px;
+    width: 466px;
+    height: 278px;
+  }
+  .lst.square {
+    height: 368px;
+  }
+  .item {
+    width: 466px;
+    height: 30px;
+    flex-direction: column;
+  }
+  .card {
+    width: 466px;
+    height: 30px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 80px;
+  }
+  .r-p {
+    width: 300px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 20px;
+    color: #d9cdd6;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .r-s {
+    width: 300px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 20px;
+    color: #ffb3cd;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .r-g {
+    width: 300px;
+    height: 30px;
+  }
+  .back {
+    position: absolute;
+    left: 113px;
+    bottom: 24px;
+    width: 240px;
+    height: 52px;
+    border-radius: 26px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-t {
+    font-size: 22px;
+    color: #ffffff;
+  }
+  .scrim {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 100%;
+    background-color: rgba(8, 6, 10, 0.72);
+  }
+  .egg {
+    position: absolute;
+    left: 83px;
+    bottom: 87px;
+    width: 300px;
+    height: 292px;
+    border-radius: 18px;
+    background-color: #241c2c;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 18px;
+  }
+  .egg.square {
+    bottom: 131px;
+  }
+  .egg-t {
+    width: 240px;
+    height: 28px;
+    line-height: 28px;
+    margin-bottom: 10px;
+    font-size: 20px;
+    color: #7ee8e0;
+    text-align: center;
+    lines: 1;
+  }
+  .egg-btn {
+    width: 240px;
+    height: 48px;
+    margin-bottom: 8px;
+    border-radius: 24px;
+    background-color: #3a2b45;
+    align-items: center;
+    justify-content: center;
+  }
+  .egg-close {
+    background-color: #2a2033;
+  }
+  .egg-bt {
+    font-size: 20px;
+    color: #ffffff;
+  }
+  .fish {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 100%;
+    background-color: #0b080d;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .fish-n {
+    width: 360px;
+    height: 32px;
+    line-height: 32px;
+    margin-bottom: 18px;
+    font-size: 22px;
+    color: #7ee8e0;
+    text-align: center;
+    lines: 1;
+  }
+  .fish-t {
+    width: 360px;
+    font-size: 24px;
+    line-height: 36px;
+    color: #ffffff;
+    text-align: center;
+    lines: 4;
+  }
+  .fish-h {
+    width: 360px;
+    height: 26px;
+    line-height: 26px;
+    margin-top: 28px;
+    font-size: 18px;
+    color: #8a7f90;
+    text-align: center;
+    lines: 1;
+  }
+</style>

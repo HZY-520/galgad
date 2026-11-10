@@ -1,0 +1,213 @@
+{
+  "tool": "tools/test-game-page.mjs",
+  "checks": 46,
+  "failures": 0,
+  "results": [
+    {
+      "ok": true,
+      "name": "模板存在阅读点击层 .tap-layer"
+    },
+    {
+      "ok": true,
+      "name": "模板存在顶部「≡」菜单按钮 .menu-fab（真机反馈：没有菜单入口）"
+    },
+    {
+      "ok": true,
+      "name": "「≡」按钮在 DOM 顺序上位于点击层之后（否则点击被点击层吃掉）"
+    },
+    {
+      "ok": true,
+      "name": "「≡」按钮绑定 @click=\"openMenu\""
+    },
+    {
+      "ok": true,
+      "name": "onInit / onReady 不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "方屏布局类生效（watch-square → .square）",
+      "detail": "layoutClass=\"square\""
+    },
+    {
+      "ok": true,
+      "name": "进入阅读后首句已渲染",
+      "detail": "pageText=\"月幕下，清辉洒落。\"…"
+    },
+    {
+      "ok": true,
+      "name": "打字机结束后允许翻页（canTap=true）"
+    },
+    {
+      "ok": true,
+      "name": "顶部章节信息已更新",
+      "detail": "第一幕 · 月幕 · 1%"
+    },
+    {
+      "ok": true,
+      "name": "进入阅读过程中没有 toast 报错",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "name": "调用了屏幕常亮接口",
+      "detail": "calls=[true,true]"
+    },
+    {
+      "ok": true,
+      "name": "连续 60 次 onTap 点击均不抛异常（回归 not a function）"
+    },
+    {
+      "ok": true,
+      "name": "点击后字幕/状态有推进",
+      "detail": "页面: \"陈舟啊，说句不好听的，你，\\n\""
+    },
+    {
+      "ok": true,
+      "name": "点击推进 4854 步不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "推进过程中出现了选项分支"
+    },
+    {
+      "ok": true,
+      "name": "一路点击可以走到结局",
+      "detail": "\"Bad End · 未能触碰的世界\""
+    },
+    {
+      "ok": true,
+      "name": "toast 调用参数合法",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "name": "圆屏布局类为空（watch-round）"
+    },
+    {
+      "ok": true,
+      "name": "开菜单菜单可见"
+    },
+    {
+      "ok": true,
+      "name": "自动播放开关打开"
+    },
+    {
+      "ok": true,
+      "name": "自动播放开关关闭"
+    },
+    {
+      "ok": true,
+      "name": "快进开关打开"
+    },
+    {
+      "ok": true,
+      "name": "快进开关关闭"
+    },
+    {
+      "ok": true,
+      "name": "阅读菜单 12 个按钮调用均不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "「主页」按钮走 router.replace 回主页",
+      "detail": "push:/pages/Chapters , push:/pages/Gallery , push:/pages/Settings , replace:/pages/Home"
+    },
+    {
+      "ok": true,
+      "name": "「保存/读取」跳转存档页",
+      "detail": "push:/pages/Saves , push:/pages/Saves"
+    },
+    {
+      "ok": true,
+      "name": "下滑 100px 打开阅读菜单"
+    },
+    {
+      "ok": true,
+      "name": "右滑 120px 快退不抛异常",
+      "detail": "字幕前: \"月幕下，清辉洒落。\""
+    },
+    {
+      "ok": true,
+      "name": "按住 450ms 后进入快进"
+    },
+    {
+      "ok": true,
+      "name": "松手后退出快进"
+    },
+    {
+      "ok": true,
+      "name": "「按住快进」全流程不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "默认字号 20 生效",
+      "detail": "font-size: 20px; line-height: 24px;"
+    },
+    {
+      "ok": true,
+      "name": "从设置页返回（字号 30）触发重排不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "字号 30 已被应用到正文行内样式（onShow 生效）",
+      "detail": "font-size: 30px; line-height: 34px;"
+    },
+    {
+      "ok": true,
+      "name": "重排后仍然渲染出完整字幕",
+      "detail": "\"月幕下，清辉洒落。\""
+    },
+    {
+      "ok": true,
+      "name": "结局页点击返回主页不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "结局页 replace 到主页"
+    },
+    {
+      "ok": true,
+      "name": "onHide 触发自动存档落盘（autoSave 键存在）"
+    },
+    {
+      "ok": true,
+      "name": "自动存档内容合法（magic + pc > 0）",
+      "detail": "pc=13"
+    },
+    {
+      "ok": true,
+      "name": "「继续阅读」从自动存档恢复并渲染出字幕",
+      "detail": "\"有种被吸了起来的错觉。\""
+    },
+    {
+      "ok": true,
+      "name": "恢复后章节信息已更新",
+      "detail": "第一幕 · 月幕"
+    },
+    {
+      "ok": true,
+      "name": "从手动存档槽 0 读档并渲染出字幕",
+      "detail": "\"有种被吸了起来的错觉。\""
+    },
+    {
+      "ok": true,
+      "name": "按 at 参数跳到指定节点并渲染",
+      "detail": "\"那个，舟子，我们赶紧回去吧。\""
+    },
+    {
+      "ok": true,
+      "name": "跳转后章节标题落在预期范围",
+      "detail": "第一幕 · 教室"
+    },
+    {
+      "ok": true,
+      "name": "onHide / onDestroy 不抛异常"
+    },
+    {
+      "ok": true,
+      "name": "onDestroy 后没有残留定时器",
+      "detail": "pending=0"
+    }
+  ],
+  "generatedAt": "2026-11-10T11:38:42.693Z"
+}

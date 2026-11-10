@@ -1,0 +1,93 @@
+{
+  "tool": "tools/validate-pages.mjs",
+  "generatedAt": "2026-11-10T11:38:41.399Z",
+  "manifest": {
+    "package": "galgad.lico",
+    "versionName": "1.0.0",
+    "entry": "pages/Home",
+    "pages": [
+      "pages/Home",
+      "pages/Game",
+      "pages/Saves",
+      "pages/Chapters",
+      "pages/Gallery",
+      "pages/Settings",
+      "pages/About"
+    ],
+    "features": [
+      "blueos.storage.storage",
+      "blueos.storage.file",
+      "blueos.window.prompt",
+      "blueos.hardware.display.brightness",
+      "blueos.app.app"
+    ]
+  },
+  "pages": [
+    {
+      "page": "pages/Home",
+      "file": "src/pages/Home/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    },
+    {
+      "page": "pages/Game",
+      "file": "src/pages/Game/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    },
+    {
+      "page": "pages/Saves",
+      "file": "src/pages/Saves/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    },
+    {
+      "page": "pages/Chapters",
+      "file": "src/pages/Chapters/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    },
+    {
+      "page": "pages/Gallery",
+      "file": "src/pages/Gallery/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    },
+    {
+      "page": "pages/Settings",
+      "file": "src/pages/Settings/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    },
+    {
+      "page": "pages/About",
+      "file": "src/pages/About/index.ux",
+      "present": true,
+      "errors": [],
+      "warnings": [],
+      "status": "PASS"
+    }
+  ],
+  "globalErrors": [],
+  "globalWarnings": [],
+  "counts": {
+    "pages": 7,
+    "present": 7,
+    "missing": 0,
+    "errors": 0,
+    "warnings": 0
+  },
+  "pass": true
+}

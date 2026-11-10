@@ -1,0 +1,266 @@
+<script>
+/**
+ * 章节选择页（Chapters）。
+ *
+ * 移植自 galgod-band（小米手环 9 Pro / Vela 版）pages/chapters/chapters.ux：
+ *  - Vela 的 router / file 全部换成 @blueos.*：读索引改用 common/story.js 的
+ *    readStoryIndex（页面脚本不直接读文件，符合 BlueOS 静态校验）；
+ *  - protected -> data；移除源工程模板上的全部滑动拦截；
+ *  - 章节过滤 / 「▶ 上次读到」/ 点击跳转语义原样保留：
+ *      hide（3 个结局章）永不显示；need（后日谈）通关后才显示；
+ *      点击行 router.replace('/pages/Game', { at: start })。
+ *  - 源工程用 $element + 列表滚动接口自动滚到当前章；
+ *    BlueOS 静态校验禁止页面调用该接口，这里改为「不自动滚动」：
+ *    过滤后章节数有限（正片 14 章，通关 +1），用户上下滑动即可，行为不丢失。
+ *  - 视觉按 466 设计宽重排：标题 top 50、副标题 top 90、列表 top 126，
+ *    列表高度圆屏 250 / 方屏 338（.lst.square），行高 82、卡片 420x76。
+ *
+ * storage/file 调用全部在 onReady/onShow，onInit 只做纯状态初始化。
+ */
+import router from '@blueos.app.appmanager.router'
+import { SAVE_MAGIC, loadAutoSave, loadCleared } from '../../common/reader.js'
+import { visibleChapters } from '../../common/engine.js'
+import { readStoryIndex } from '../../common/story.js'
+
+/** 页面级非响应式运行时（放模块级避免被响应式代理；页面单实例） */
+const st = {
+  story: null,
+  cleared: false,
+  // 自动存档里的当前节点下标；-1 表示没有自动存档（此时不标 ▶）
+  pc: -1,
+  starts: [],
+  loadToken: 0,
+  shown: false,
+}
+
+export default {
+  data: {
+    rows: [],
+    count: 0,
+    // 圆屏 / 方屏（watch-square 时列表更高）
+    square: false,
+  },
+
+  onInit() {
+    // 只做纯状态初始化，不调用 storage / file
+    st.story = null
+    st.cleared = false
+    st.pc = -1
+    st.starts = []
+    st.loadToken = 0
+    st.shown = false
+    this.square = this.$device && this.$device.deviceType === 'watch-square'
+    this.rows = []
+    this.count = 0
+  },
+
+  onReady() {
+    // 页面创建完成后再调 feature API（storage / file）
+    this.load()
+  },
+
+  onShow() {
+    // 首次 onShow 紧跟 onReady，不重复读；回到前台时刷新「上次读到」标记
+    if (st.shown) this.load()
+    st.shown = true
+  },
+
+  onDestroy() {
+    st.loadToken += 1
+  },
+
+  // ---------------------------------------------------------------- 数据加载
+  load() {
+    const token = ++st.loadToken
+    let left = 3
+    const done = () => {
+      if (token !== st.loadToken) return
+      left -= 1
+      if (left <= 0) this.renderRows()
+    }
+    loadAutoSave((d) => {
+      if (token !== st.loadToken) return
+      // 兼容没有自动存档（null）的情况
+      st.pc = (d && d.magic === SAVE_MAGIC && typeof d.pc === 'number' && d.pc >= 0)
+        ? d.pc
+        : -1
+      done()
+    })
+    loadCleared((ok) => {
+      if (token !== st.loadToken) return
+      st.cleared = !!ok
+      done()
+    })
+    readStoryIndex((idx) => {
+      if (token !== st.loadToken) return
+      st.story = idx || null
+      done()
+    })
+  },
+
+  // ---------------------------------------------------------------- 渲染
+  renderRows() {
+    // 索引读取失败时给一行错误提示（与源工程文案一致）
+    if (!st.story) {
+      st.starts = []
+      this.rows = [{ key: 'err', no: '!', title: '读取剧本索引失败', mark: '', start: '0' }]
+      this.count = 1
+      return
+    }
+    const pc = st.pc >= 0 ? st.pc : 0
+    // visibleChapters 已过滤 hide / need，并给出 current（上次读到的章）
+    const list = visibleChapters(st.story, st.cleared, pc)
+    const rows = []
+    st.starts = []
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i]
+      // 没有自动存档时不显示 ▶（保持源工程「读到哪里才标」的语义）
+      const mark = (st.pc >= 0 && c.current) ? '▶' : ''
+      rows.push({
+        key: 'ch' + c.no,
+        no: String(c.no),
+        title: c.title,
+        mark: mark,
+        start: String(c.start),
+      })
+      st.starts.push(c.start)
+    }
+    this.rows = rows
+    this.count = rows.length
+  },
+
+  // ---------------------------------------------------------------- 交互
+  pick(idx) {
+    const at = st.starts[idx]
+    if (at === undefined || at === null) return
+    router.replace({ uri: '/pages/Game', params: { at: String(at) } })
+  },
+
+  back() {
+    router.back()
+  },
+}
+</script>
+
+<template>
+  <div class="page">
+    <text class="title">章节选择</text>
+    <text class="sub">共 {{ count }} 章 · 上下滑动 · 点按开始</text>
+
+    <list class="lst {{ square ? 'square' : '' }}" bounces="true" scrollbar="false">
+      <list-item type="row" class="item" for="{{ rows }}" tid="key" @click="pick($idx)">
+        <div class="card">
+          <text class="no">{{ $item.no }}</text>
+          <text class="nm">{{ $item.title }}</text>
+          <text class="mk">{{ $item.mark }}</text>
+        </div>
+      </list-item>
+    </list>
+
+    <div class="back" @click="back"><text class="btn-t">返回</text></div>
+  </div>
+</template>
+
+<style>
+  .page {
+    width: 466px;
+    height: 100%;
+    background-color: #14101a;
+  }
+  .title {
+    position: absolute;
+    left: 0px;
+    top: 50px;
+    width: 466px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #ffd8e6;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .sub {
+    position: absolute;
+    left: 0px;
+    top: 90px;
+    width: 466px;
+    height: 24px;
+    line-height: 24px;
+    font-size: 18px;
+    color: #9c8f9b;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .lst {
+    position: absolute;
+    left: 0px;
+    top: 126px;
+    width: 466px;
+    height: 250px;
+  }
+  .lst.square {
+    height: 338px;
+  }
+  .item {
+    width: 466px;
+    height: 82px;
+    flex-direction: column;
+  }
+  .card {
+    width: 420px;
+    height: 76px;
+    margin-left: 23px;
+    margin-top: 3px;
+    border-radius: 18px;
+    background-color: #241c2c;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .no {
+    width: 44px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 18px;
+    color: #cf9ec0;
+    text-align: center;
+    lines: 1;
+  }
+  .nm {
+    width: 300px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 23px;
+    color: #ffffff;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .mk {
+    width: 20px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 18px;
+    color: #7ee8e0;
+    text-align: center;
+    lines: 1;
+  }
+  .back {
+    position: absolute;
+    left: 113px;
+    bottom: 24px;
+    width: 240px;
+    height: 52px;
+    border-radius: 26px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-t {
+    font-size: 22px;
+    color: #ffffff;
+  }
+</style>

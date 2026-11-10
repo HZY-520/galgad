@@ -1,0 +1,64 @@
+{
+  "tool": "tools/check-methods.mjs",
+  "files": 8,
+  "errors": 0,
+  "results": [
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\app.ux",
+      "definedCount": 5,
+      "callCount": 0,
+      "handlerCount": 0,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\About\\index.ux",
+      "definedCount": 13,
+      "callCount": 9,
+      "handlerCount": 7,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Chapters\\index.ux",
+      "definedCount": 10,
+      "callCount": 3,
+      "handlerCount": 2,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Gallery\\index.ux",
+      "definedCount": 22,
+      "callCount": 13,
+      "handlerCount": 11,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Game\\index.ux",
+      "definedCount": 70,
+      "callCount": 145,
+      "handlerCount": 22,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Home\\index.ux",
+      "definedCount": 14,
+      "callCount": 4,
+      "handlerCount": 9,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Saves\\index.ux",
+      "definedCount": 14,
+      "callCount": 5,
+      "handlerCount": 5,
+      "errors": []
+    },
+    {
+      "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Settings\\index.ux",
+      "definedCount": 19,
+      "callCount": 17,
+      "handlerCount": 10,
+      "errors": []
+    }
+  ],
+  "generatedAt": "2026-11-10T11:38:40.434Z"
+}

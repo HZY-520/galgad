@@ -1,0 +1,422 @@
+<script>
+/**
+ * 设置页：5 组设置 + 实时预览 + 重置/返回。
+ *
+ * 移植自 galgod-band（Vela 版）pages/settings/settings.ux，按 BlueOS 规则重写：
+ *  - Vela 的系统接口全部换成 BlueOS 的 @blueos.* 模块；
+ *  - 源工程的滑杆控件不再使用（普通 div/text 的加减步进在实机上更稳），
+ *    所有设置项都用 46×46 的「− / ＋」按钮，没有拖动类手势依赖；
+ *  - data 只放模板要绑定的字段；归一化后的 settings 与定时器句柄放模块级 st，
+ *    避免把整个设置对象塞进响应式代理（性能规范）；
+ *  - storage 只在 onReady 读取；保存 300ms 防抖，返回 / onHide / onDestroy 立即写盘；
+ *  - 几何按 docs/PORT-SPEC.md §3.4：标题 top 44；滚动区 top 100、left 53、宽 360，
+ *    圆屏高 250 / 方屏 338；底部两个 152×50 按钮，bottom 24。
+ */
+import router from '@blueos.app.appmanager.router'
+import prompt from '@blueos.window.prompt'
+import {
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  loadSettings,
+  saveSettings,
+  SPEED_MIN,
+  SPEED_MAX,
+  AUTO_MIN,
+  AUTO_MAX,
+  armTimer,
+  disarmTimer,
+} from '../../common/reader.js'
+import { SIZE_MIN, SIZE_MAX, detectShape, textStyle } from '../../common/layout.js'
+
+/** 自动播放步进：每字 10 毫秒 */
+const AUTO_STEP = 10
+/** 长按行为的三种取值，与 reader.js 的 LONGPRESS_MODES 一致 */
+const LONGPRESS_MODES = ['hide', 'fast', 'off']
+/** 保存防抖时间 */
+const SAVE_DEBOUNCE_MS = 300
+
+/** 页面级非响应式状态（单实例页面，模块级即可） */
+const st = {
+  settings: Object.assign({}, DEFAULT_SETTINGS),
+  loaded: false, // storage 读完前不写盘，避免把默认值覆盖掉用户已有设置
+  saveTimer: 0,
+}
+
+function clampInt(v, lo, hi) {
+  const n = Math.round(Number(v))
+  if (!isFinite(n)) return lo
+  if (n < lo) return lo
+  if (n > hi) return hi
+  return n
+}
+
+export default {
+  data: {
+    // 三组数值设置的显示文案（0 分别显示「瞬间」/「关闭」）
+    sizeText: '',
+    speedText: '',
+    autoText: '',
+    // 两组开关的胶囊按钮：{ t: 文案, cls: 样式类, k: 唯一 tid }
+    rowKeep: [],
+    rowLp: [],
+    hint1: '',
+    hint2: '',
+    // 实时预览的字号/行高（由 layout.textStyle 生成）
+    pvStyle: 'font-size: 20px; line-height: 24px;',
+    // 方屏运行时类（round 为空串）
+    layoutClass: '',
+  },
+
+  // ---------------------------------------------------------------- 生命周期
+  onInit() {
+    // onInit 只做纯状态：不读 storage、不碰 feature API
+    st.settings = Object.assign({}, DEFAULT_SETTINGS)
+    st.loaded = false
+    st.saveTimer = 0
+    this.layoutClass = detectShape(this.$device) === 'square' ? 'square' : ''
+    this.refresh()
+  },
+
+  onReady() {
+    // storage 读取放在 onReady（页面创建完成后再调用 feature API）
+    loadSettings((s) => {
+      st.settings = s
+      st.loaded = true
+      this.refresh()
+    })
+  },
+
+  onHide() {
+    this.flush()
+  },
+
+  onDestroy() {
+    this.flush()
+  },
+
+  // ---------------------------------------------------------------- 文案 / 预览
+  refresh() {
+    const s = st.settings
+    this.sizeText = String(s.size)
+    this.speedText = s.speed === 0 ? '瞬间' : String(s.speed)
+    this.autoText = s.autoMs === 0 ? '关闭' : String(s.autoMs)
+
+    // 屏幕常亮：关 / 开 两个胶囊
+    this.rowKeep = [
+      { t: '关', cls: s.keepOn ? 'pill' : 'pill-on', k: 'keep-off' },
+      { t: '开', cls: s.keepOn ? 'pill-on' : 'pill', k: 'keep-on' },
+    ]
+
+    // 长按行为三选一：隐藏 / 快进 / 关闭（对老存档的老布尔值也做归一）
+    const lpCur = s.longpress === 'fast' ? 'fast' : (s.longpress === 'off' ? 'off' : 'hide')
+    const lpText = ['隐藏', '快进', '关闭']
+    const rowLp = []
+    for (let i = 0; i < LONGPRESS_MODES.length; i++) {
+      rowLp.push({
+        t: lpText[i],
+        cls: LONGPRESS_MODES[i] === lpCur ? 'pill-on' : 'pill',
+        k: 'lp-' + LONGPRESS_MODES[i],
+      })
+    }
+    this.rowLp = rowLp
+
+    this.hint1 = '字号 ' + SIZE_MIN + '~' + SIZE_MAX + ' px，显示的数字就是 px'
+    this.hint2 = '播放速度＝每字毫秒；自动播放＝每句停留毫秒。长按选「快进」时是按住才快进'
+    // 预览正文的行内字号/行高，与阅读器正文使用同一个排版函数
+    this.pvStyle = textStyle(s.size)
+  },
+
+  // ---------------------------------------------------------------- 应用 / 保存
+  apply(patch) {
+    st.settings = normalizeSettings(Object.assign({}, st.settings, patch || {}))
+    this.refresh()
+    // 300ms 防抖：连点加减时不会每一下都写 storage
+    disarmTimer(st, 'saveTimer')
+    armTimer(st, 'saveTimer', () => {
+      saveSettings(st.settings)
+    }, SAVE_DEBOUNCE_MS)
+  },
+
+  /** 立即写盘（返回 / 页面隐藏 / 销毁 / 重置时调用） */
+  flush() {
+    disarmTimer(st, 'saveTimer')
+    // 还没读到用户设置时不写盘，避免把默认值覆盖到已有设置上
+    if (!st.loaded) return
+    saveSettings(st.settings)
+  },
+
+  // ---------------------------------------------------------------- 数值步进
+  step(field, delta, lo, hi) {
+    const cur = clampInt(st.settings[field], lo, hi)
+    const v = clampInt(cur + delta, lo, hi)
+    const patch = {}
+    patch[field] = v
+    // 自动播放与快进互斥：打开自动播放时清掉快进临时态
+    if (field === 'autoMs' && v > 0) patch.fast = false
+    this.apply(patch)
+  },
+
+  decSize() { this.step('size', -1, SIZE_MIN, SIZE_MAX) },
+  incSize() { this.step('size', 1, SIZE_MIN, SIZE_MAX) },
+  decSpeed() { this.step('speed', -2, SPEED_MIN, SPEED_MAX) },
+  incSpeed() { this.step('speed', 2, SPEED_MIN, SPEED_MAX) },
+  decAuto() { this.step('autoMs', -AUTO_STEP, AUTO_MIN, AUTO_MAX) },
+  incAuto() { this.step('autoMs', AUTO_STEP, AUTO_MIN, AUTO_MAX) },
+
+  // ---------------------------------------------------------------- 开关
+  pickKeep(i) {
+    this.apply({ keepOn: i === 1 })
+  },
+
+  pickLp(i) {
+    // 0 隐藏界面 / 1 快进 / 2 关闭
+    this.apply({ longpress: LONGPRESS_MODES[i] || 'hide' })
+  },
+
+  // ---------------------------------------------------------------- 底部
+  reset() {
+    st.settings = normalizeSettings(Object.assign({}, DEFAULT_SETTINGS))
+    this.refresh()
+    this.flush()
+    prompt.showToast({ message: '已恢复默认设置' })
+  },
+
+  back() {
+    this.flush()
+    router.back()
+  },
+}
+</script>
+
+<template>
+  <div class="page">
+    <text class="title">设置</text>
+
+    <!-- 设置项放进纵向滚动容器；预览卡片跟在提示行后面，滚动到底即可看到 -->
+    <div class="scroll-wrap {{ layoutClass }}">
+      <scroll class="scroll {{ layoutClass }}" scroll-y="true" bounces="true">
+        <div class="content">
+          <!-- 字体大小 14~30，步进 1 -->
+          <div class="row">
+            <text class="lab">字体大小</text>
+            <text class="step" @click="decSize">−</text>
+            <text class="val">{{ sizeText }}</text>
+            <text class="step" @click="incSize">＋</text>
+          </div>
+
+          <!-- 播放速度 0~120 毫秒/字，步进 2，0 显示「瞬间」 -->
+          <div class="row">
+            <text class="lab">播放速度</text>
+            <text class="step" @click="decSpeed">−</text>
+            <text class="val">{{ speedText }}</text>
+            <text class="step" @click="incSpeed">＋</text>
+          </div>
+
+          <!-- 自动播放 0~200 毫秒/字，步进 10，0 显示「关闭」 -->
+          <div class="row">
+            <text class="lab">自动播放</text>
+            <text class="step" @click="decAuto">−</text>
+            <text class="val">{{ autoText }}</text>
+            <text class="step" @click="incAuto">＋</text>
+          </div>
+
+          <!-- 屏幕常亮：关 / 开 -->
+          <div class="row">
+            <text class="lab lab-sm">屏幕常亮</text>
+            <div class="pill-wrap">
+              <text class="{{ $item.cls }}" for="{{ rowKeep }}" tid="k" @click="pickKeep($idx)">{{ $item.t }}</text>
+            </div>
+          </div>
+
+          <!-- 长按屏幕：隐藏 / 快进 / 关闭 -->
+          <div class="row">
+            <text class="lab lab-sm">长按屏幕</text>
+            <div class="pill-wrap">
+              <text class="{{ $item.cls }}" for="{{ rowLp }}" tid="k" @click="pickLp($idx)">{{ $item.t }}</text>
+            </div>
+          </div>
+
+          <text class="hint">{{ hint1 }}</text>
+          <text class="hint hint2">{{ hint2 }}</text>
+
+          <!-- 实时预览：字号随设置即时变化 -->
+          <div class="pv">
+            <text class="pv-name">林曦</text>
+            <text class="pv-line" style="{{ pvStyle }}">想成为Galgame领域大神！！！</text>
+          </div>
+        </div>
+      </scroll>
+    </div>
+
+    <!-- 底部：重置 / 返回（§3.4 的 152×50、bottom 24；
+         两个按钮的 left 取 81 / 241，避免 152 宽时 113/241 会重叠 24px） -->
+    <div class="btn btn-reset" @click="reset"><text class="btn-t">重置</text></div>
+    <div class="btn btn-back" @click="back"><text class="btn-t">返回</text></div>
+  </div>
+</template>
+
+<style>
+  .page {
+    width: 466px;
+    height: 100%;
+    background-color: #14101a;
+  }
+  .title {
+    position: absolute;
+    left: 113px;
+    top: 44px;
+    width: 240px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 26px;
+    font-weight: bold;
+    color: #ffd8e6;
+    text-align: center;
+  }
+  /* scroll 自身不参与定位，用外层 div 定位（scroll 对 position 支持不可靠） */
+  .scroll-wrap {
+    position: absolute;
+    left: 53px;
+    top: 100px;
+    width: 360px;
+    height: 250px;
+  }
+  .scroll-wrap.square {
+    height: 338px;
+  }
+  .scroll {
+    width: 360px;
+    height: 250px;
+  }
+  .scroll.square {
+    height: 338px;
+  }
+  .content {
+    width: 360px;
+    flex-direction: column;
+  }
+  /* 每行 62 高：标签 150 + 步进 46 + 数值 64 + 步进 46，space-between 均分余量 */
+  .row {
+    width: 360px;
+    height: 62px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .lab {
+    width: 150px;
+    font-size: 22px;
+    font-weight: bold;
+    color: #f5e1e8;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  /* 开关行的标签窄一点，给 2/3 个 74 宽胶囊留位置 */
+  .lab-sm {
+    width: 104px;
+  }
+  .step {
+    width: 46px;
+    height: 46px;
+    line-height: 46px;
+    font-size: 26px;
+    font-weight: bold;
+    color: #ffffff;
+    text-align: center;
+    background-color: #32243a;
+    border-radius: 23px;
+  }
+  .val {
+    width: 64px;
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffd8e6;
+    text-align: center;
+    lines: 1;
+  }
+  .pill-wrap {
+    flex-direction: row;
+    align-items: center;
+  }
+  .pill {
+    width: 74px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 20px;
+    color: #cbbcc6;
+    text-align: center;
+    background-color: #2c2133;
+    border-radius: 20px;
+    margin-left: 6px;
+  }
+  .pill-on {
+    width: 74px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 20px;
+    color: #ffffff;
+    text-align: center;
+    background-color: #b95079;
+    border-radius: 20px;
+    margin-left: 6px;
+  }
+  .hint {
+    width: 360px;
+    height: 22px;
+    line-height: 22px;
+    font-size: 16px;
+    color: #9c8f9b;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .hint2 {
+    height: 44px;
+    lines: 2;
+  }
+  /* 实时预览卡片 360×104：说话人固定 18，正文由 pvStyle 动态给字号/行高 */
+  .pv {
+    width: 360px;
+    height: 104px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    padding-left: 14px;
+    padding-top: 8px;
+    background-color: rgba(18, 13, 19, 0.9);
+    border-radius: 14px;
+    flex-direction: column;
+  }
+  .pv-name {
+    height: 24px;
+    line-height: 24px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffd8e6;
+  }
+  .pv-line {
+    width: 320px;
+    height: 70px;
+    color: #ffffff;
+    lines: 2;
+    text-overflow: ellipsis;
+  }
+  .btn {
+    position: absolute;
+    bottom: 24px;
+    width: 152px;
+    height: 50px;
+    border-radius: 25px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-reset {
+    left: 81px;
+  }
+  .btn-back {
+    left: 241px;
+  }
+  .btn-t {
+    font-size: 22px;
+    color: #ffffff;
+  }
+</style>

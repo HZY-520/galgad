@@ -1,0 +1,78 @@
+{
+  "package": "galgad.lico",
+  "name": "想成为Gal神",
+  "icon": "/assets/images/icon.png",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "appCategory": [
+    "games",
+    "pastime"
+  ],
+  "features": [
+    {
+      "name": "blueos.storage.storage"
+    },
+    {
+      "name": "blueos.storage.file"
+    },
+    {
+      "name": "blueos.window.prompt"
+    },
+    {
+      "name": "blueos.hardware.display.brightness"
+    },
+    {
+      "name": "blueos.app.app"
+    }
+  ],
+  "deviceTypeList": [
+    "watch",
+    "watch-square",
+    "watch-round"
+  ],
+  "config": {
+    "designWidth": 466,
+    "logLevel": "log"
+  },
+  "router": {
+    "entry": "pages/Home",
+    "pages": {
+      "pages/Home": {
+        "component": "index",
+        "launchMode": "singleTask"
+      },
+      "pages/Game": {
+        "component": "index",
+        "launchMode": "singleTask",
+        "followHand": "disable"
+      },
+      "pages/Saves": {
+        "component": "index",
+        "launchMode": "singleTask"
+      },
+      "pages/Chapters": {
+        "component": "index",
+        "launchMode": "singleTask"
+      },
+      "pages/Gallery": {
+        "component": "index",
+        "launchMode": "singleTask",
+        "followHand": "disable"
+      },
+      "pages/Settings": {
+        "component": "index",
+        "launchMode": "singleTask"
+      },
+      "pages/About": {
+        "component": "index",
+        "launchMode": "singleTask"
+      }
+    }
+  },
+  "display": {
+    "backgroundColor": "#14101a"
+  },
+  "distrubuteRules": {
+    "minAPILevel": 1
+  }
+}

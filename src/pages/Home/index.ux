@@ -1,0 +1,215 @@
+<script>
+/**
+ * 主页：标题画 + 最近进度 + 开始/继续 + 六个入口。
+ *
+ * 实机布局约束（参照 galgame 的 vivo WATCH GT 2 实机经验）：
+ *  - 真机上「嵌套在定位容器里的 absolute 子元素」宽度会被二次换算，所以本页
+ *    所有定位元素都是 .page 的直接子节点，全部用显式 px / bottom 锚定，不用百分比。
+ *  - 半透明一律用 rgba 背景色，不给带子节点的容器加 opacity。
+ *  - 圆屏 466x466 与方屏（432x514，设计高度约 554）共用同一套 bottom 锚定布局。
+ */
+import router from '@blueos.app.appmanager.router'
+import { loadAutoSave, SAVE_MAGIC } from '../../common/reader.js'
+
+export default {
+  data: {
+    hasAuto: false,
+    autoText: '——',
+  },
+
+  onInit() {},
+
+  onReady() {
+    this.refresh()
+  },
+
+  onShow() {
+    this.refresh()
+  },
+
+  onRefresh() {
+    this.refresh()
+  },
+
+  refresh() {
+    loadAutoSave((d) => {
+      if (!d || d.magic !== SAVE_MAGIC || !(d.pc >= 0)) {
+        this.hasAuto = false
+        this.autoText = '——'
+        return
+      }
+      this.autoText = '第' + ((d.chapter || 0) + 1) + '章'
+      this.hasAuto = true
+    })
+  },
+
+  onContinue() {
+    if (this.hasAuto) {
+      router.push({ uri: '/pages/Game', params: { auto: '1' } })
+      return
+    }
+    this.onNewGame()
+  },
+
+  onNewGame() {
+    router.push({ uri: '/pages/Game' })
+  },
+
+  onSaves() {
+    router.push({ uri: '/pages/Saves', params: { mode: 'load' } })
+  },
+
+  onChapters() {
+    router.push({ uri: '/pages/Chapters' })
+  },
+
+  onGallery() {
+    router.push({ uri: '/pages/Gallery' })
+  },
+
+  onSettings() {
+    router.push({ uri: '/pages/Settings' })
+  },
+
+  onAbout() {
+    router.push({ uri: '/pages/About' })
+  },
+
+  onQuit() {
+    this.$app.exit()
+  },
+}
+</script>
+
+<template>
+  <div class="page">
+    <image class="home-art" src="/assets/images/home.png"></image>
+    <div class="shade"></div>
+
+    <text class="resume" if="{{ hasAuto }}">最近进度 · {{ autoText }}</text>
+    <text class="resume" if="{{ !hasAuto }}">还没有存档，从序章开始吧</text>
+
+    <div class="panel"></div>
+
+    <div class="btn btn-primary" if="{{ !hasAuto }}" @click="onNewGame">
+      <text class="btn-t">开始阅读</text>
+    </div>
+    <div class="btn btn-half btn-primary" if="{{ hasAuto }}" @click="onContinue">
+      <text class="btn-t">继续阅读</text>
+    </div>
+    <div class="btn btn-half btn-restart" if="{{ hasAuto }}" @click="onNewGame">
+      <text class="btn-ts">重新开始</text>
+    </div>
+
+    <div class="btn btn-5 pos1 row2" @click="onSaves"><text class="btn-ts">存档</text></div>
+    <div class="btn btn-5 pos2 row2" @click="onChapters"><text class="btn-ts">章节</text></div>
+    <div class="btn btn-5 pos3 row2" @click="onGallery"><text class="btn-ts">CG</text></div>
+
+    <div class="btn btn-5 pos1 row3" @click="onSettings"><text class="btn-ts">设置</text></div>
+    <div class="btn btn-5 pos2 row3" @click="onAbout"><text class="btn-ts">关于</text></div>
+    <div class="btn btn-5 pos3 row3" @click="onQuit"><text class="btn-ts">退出</text></div>
+  </div>
+</template>
+
+<style>
+  .page {
+    width: 466px;
+    height: 100%;
+    background-color: #0d0910;
+  }
+  /* 标题画按 466x666 生成（源图 336x480 等比放大），底部被面板盖住，只露出上面约 266px */
+  .home-art {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 666px;
+    object-fit: fill;
+  }
+  .shade {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 100%;
+    background-color: rgba(13, 9, 16, 0.28);
+  }
+  .panel {
+    position: absolute;
+    left: 0px;
+    bottom: 0px;
+    width: 466px;
+    height: 200px;
+    background-color: rgba(21, 15, 25, 0.94);
+    border-radius: 28px;
+  }
+  .resume {
+    position: absolute;
+    left: 0px;
+    bottom: 210px;
+    width: 466px;
+    height: 26px;
+    line-height: 26px;
+    font-size: 18px;
+    color: #b9a7b3;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .btn {
+    position: absolute;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-primary {
+    left: 73px;
+    bottom: 130px;
+    width: 320px;
+    height: 50px;
+    border-radius: 25px;
+    background-color: #b95079;
+  }
+  .btn-half {
+    width: 152px;
+  }
+  .btn-half.btn-primary {
+    left: 73px;
+  }
+  .btn-restart {
+    left: 241px;
+    bottom: 130px;
+    width: 152px;
+    height: 50px;
+    border-radius: 25px;
+    background-color: #3a2b45;
+  }
+  .btn-5 {
+    width: 96px;
+    height: 46px;
+    border-radius: 23px;
+  }
+  .row2 {
+    bottom: 72px;
+  }
+  .row3 {
+    bottom: 18px;
+  }
+  .pos1 {
+    left: 73px;
+  }
+  .pos2 {
+    left: 185px;
+  }
+  .pos3 {
+    left: 297px;
+  }
+  .btn-t {
+    font-size: 24px;
+    color: #ffffff;
+  }
+  .btn-ts {
+    font-size: 20px;
+    color: #ffffff;
+  }
+</style>

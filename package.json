@@ -1,0 +1,33 @@
+{
+  "name": "galgad",
+  "version": "1.1.0",
+  "packageManager": "pnpm@^9.9.0",
+  "description": "GalGod（想成为Galgame领域大神）· vivo BlueOS 手表移植版",
+  "private": true,
+  "scripts": {
+    "gen": "node ./scripts/gen/index.js",
+    "story": "node ./tools/import_story.mjs",
+    "assets": "python ./tools/gen_assets.py",
+    "lint": "node ./tools/lint-timers.js --root .",
+    "methods": "node ./tools/check-methods.mjs",
+    "validate": "node ./tools/validate-story.mjs && node ./tools/validate-pages.mjs",
+    "test": "node ./tools/test-engine.mjs && node ./tools/test-reader.mjs && node ./tools/test-game-page.mjs && node ./tools/test-pages.mjs",
+    "check": "npm run lint && npm run methods && npm run validate && npm run test",
+    "build:debug": "node ./tools/build.mjs --debug --device watch-round",
+    "build:square": "node ./tools/build.mjs --debug --device watch-square",
+    "build:round": "node ./tools/build.mjs --release --device watch-round",
+    "build": "node ./tools/build.mjs --release --device watch-square",
+    "verify": "npm run check && npm run build:debug && npm run build:square"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "semi": false,
+    "printWidth": 80,
+    "proseWrap": "never",
+    "tabWidth": 2,
+    "bracketSameLine": true,
+    "htmlWhitespaceSensitivity": "ignore",
+    "vueIndentScriptAndStyle": true,
+    "trailingComma": "es5"
+  }
+}

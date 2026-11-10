@@ -1,0 +1,431 @@
+<script>
+/**
+ * 存档 / 读档页（Saves）。
+ *
+ * 移植自 galgod-band（小米手环 9 Pro / Vela 版）pages/saves/saves.ux：
+ *  - Vela 的 router / storage / prompt 全部换成 @blueos.* 对应模块；
+ *  - protected -> data（BlueOS 不认 protected，且路由参数 mode 在 data 中同名接收）；
+ *  - 移除源工程模板上的全部滑动拦截（BlueOS 没有滑动手势事件）；
+ *  - 源工程 onInit 里直接读 storage 的写法拆开：onInit 只做纯状态初始化，
+ *    loadSaves / loadAutoSave / pendingSave 统一放到 onReady/onShow（feature API 规范）；
+ *  - 视觉按 466 设计宽重排：标题 top 50、副标题 top 90、列表 top 126，
+ *    列表高度圆屏 250 / 方屏 338（.lst.square），行高 82、卡片 420x76；
+ *    所有定位元素都是 .page 的直接子节点，显式 px + bottom 锚定。
+ *
+ * 行为（与源工程逐条一致）：
+ *  - 固定 7 行：自动存档 + 存档 1..6；自动存档行 tag 为「自动」（save）/「读取」（load）；
+ *  - mode=save：点按手动槽把 pendingSave 写入该槽（覆盖），落盘后 toast + 重绘；
+ *  - mode=load：点按手动槽 router.replace 到 Game 并传 load；自动存档行传 auto=1；
+ *  - 自动存档不可覆盖、不可删除（toast）；长按手动槽弹确认框删除；
+ *  - pendingSave 读到后立即删除 key，只在 Game -> Saves(save) 之间传递一次；
+ *  - suppress：Vela 长按后会再派发一次 click，先吞掉这一次，避免误读档/误覆盖。
+ */
+import router from '@blueos.app.appmanager.router'
+import prompt from '@blueos.window.prompt'
+import {
+  MAX_SLOTS,
+  SAVE_MAGIC,
+  loadSaves,
+  saveSaves,
+  loadAutoSave,
+  readJSON,
+  deleteKey,
+} from '../../common/reader.js'
+import { describeSave } from '../../common/engine.js'
+
+/** 页面级非响应式运行时（放模块级避免被响应式代理；页面单实例） */
+const st = {
+  slots: [],
+  auto: null,
+  pending: null,
+  suppress: false,
+  pendingLoaded: false,
+  loadToken: 0,
+  shown: false,
+}
+
+export default {
+  data: {
+    // 路由参数：'save' = 保存进度，'load' = 读取进度（router params 值统一 String）
+    mode: 'load',
+    isSave: false,
+    // 圆屏 / 方屏（watch-square 时列表更高）
+    square: false,
+    rows: [],
+    confirmIdx: -1,
+  },
+
+  onInit() {
+    // 只做纯状态初始化，不调用 storage / router / prompt
+    st.slots = []
+    st.auto = null
+    st.pending = null
+    st.suppress = false
+    st.pendingLoaded = false
+    st.loadToken = 0
+    st.shown = false
+    this.square = this.$device && this.$device.deviceType === 'watch-square'
+    this.isSave = String(this.mode) === 'save'
+    this.rows = []
+    this.confirmIdx = -1
+  },
+
+  onReady() {
+    // 页面创建完成后再调 feature API（storage）
+    this.isSave = String(this.mode) === 'save'
+    this.reload()
+  },
+
+  onShow() {
+    // 首次 onShow 紧跟 onReady，不重复读；再次回到前台时刷新存档列表
+    if (st.shown) this.reload()
+    st.shown = true
+  },
+
+  /** singleTask 再次打开：onRefresh 在 onShow 之前执行，按新 mode 重新读 pendingSave */
+  onRefresh(query) {
+    const q = query || {}
+    if (q.mode !== undefined && q.mode !== null) this.mode = String(q.mode)
+    this.isSave = String(this.mode) === 'save'
+    this.confirmIdx = -1
+    st.pendingLoaded = false
+  },
+
+  onDestroy() {
+    // 让未完成的 storage 回调失效
+    st.loadToken += 1
+  },
+
+  // ---------------------------------------------------------------- 数据加载
+  reload() {
+    const token = ++st.loadToken
+    let left = st.pendingLoaded ? 2 : 3
+    const done = () => {
+      if (token !== st.loadToken) return
+      left -= 1
+      if (left <= 0) this.render()
+    }
+    loadSaves((list) => {
+      if (token !== st.loadToken) return
+      st.slots = Array.isArray(list) ? list : []
+      done()
+    })
+    loadAutoSave((d) => {
+      if (token !== st.loadToken) return
+      st.auto = d || null
+      done()
+    })
+    if (!st.pendingLoaded) {
+      // 读到即清空：pendingSave 只用于 Game -> Saves(mode=save) 的一次性传递
+      readJSON('pendingSave', null, (v) => {
+        if (token !== st.loadToken) return
+        st.pendingLoaded = true
+        st.pending = v && v.magic === SAVE_MAGIC ? v : null
+        if (v) deleteKey('pendingSave')
+        done()
+      })
+    }
+  },
+
+  // ---------------------------------------------------------------- 渲染
+  render() {
+    const rows = []
+    // 第 0 行：自动存档（只读）
+    rows.push({
+      key: 'auto',
+      name: '自动存档',
+      info: describeSave(st.auto),
+      tag: this.isSave ? '自动' : '读取',
+    })
+    // 第 1..6 行：手动存档槽
+    for (let i = 0; i < MAX_SLOTS; i++) {
+      const s = st.slots[i]
+      const valid = !!(s && s.magic === SAVE_MAGIC)
+      rows.push({
+        key: 'slot' + i,
+        name: '存档 ' + (i + 1),
+        info: valid ? describeSave(s) : '（空）',
+        tag: this.isSave ? '覆盖' : (valid ? '读取' : '空'),
+      })
+    }
+    this.rows = rows
+  },
+
+  // ---------------------------------------------------------------- 交互
+  pick(idx) {
+    // 长按删除后紧跟的 click 要吞掉（源工程 suppress 机制）
+    if (st.suppress) {
+      st.suppress = false
+      return
+    }
+    if (idx === 0) {
+      if (this.isSave) {
+        prompt.showToast({ message: '自动存档不可覆盖' })
+        return
+      }
+      if (!st.auto || st.auto.magic !== SAVE_MAGIC) {
+        prompt.showToast({ message: '暂无自动存档' })
+        return
+      }
+      router.replace({ uri: '/pages/Game', params: { auto: '1' } })
+      return
+    }
+    const slot = idx - 1
+    if (this.isSave) {
+      if (!st.pending) {
+        prompt.showToast({ message: '没有可保存的进度' })
+        return
+      }
+      const list = st.slots.slice()
+      list[slot] = st.pending
+      st.slots = list
+      saveSaves(list, (ok) => {
+        prompt.showToast({ message: ok ? '已保存到存档 ' + (slot + 1) : '保存失败' })
+        this.render()
+      })
+      return
+    }
+    const s = st.slots[slot]
+    if (!s || s.magic !== SAVE_MAGIC) {
+      prompt.showToast({ message: '该存档为空' })
+      return
+    }
+    router.replace({ uri: '/pages/Game', params: { load: String(slot) } })
+  },
+
+  askDelete(idx) {
+    if (idx === 0) {
+      prompt.showToast({ message: '自动存档不可删除' })
+      return
+    }
+    st.suppress = true
+    this.confirmIdx = idx
+  },
+
+  cancelDelete() {
+    this.confirmIdx = -1
+  },
+
+  doDelete() {
+    const idx = this.confirmIdx
+    this.confirmIdx = -1
+    if (idx <= 0) return
+    const list = st.slots.slice()
+    list[idx - 1] = null
+    st.slots = list
+    saveSaves(list, () => this.render())
+  },
+
+  back() {
+    router.back()
+  },
+}
+</script>
+
+<template>
+  <div class="page">
+    <text class="title">{{ isSave ? '保存进度' : '读取进度' }}</text>
+    <text class="sub">{{ isSave ? '点按覆盖 · 长按删除' : '点按读取 · 长按删除' }}</text>
+
+    <list class="lst {{ square ? 'square' : '' }}" bounces="true" scrollbar="false">
+      <list-item type="row" class="item" for="{{ rows }}" tid="key"
+                 @click="pick($idx)" @longpress="askDelete($idx)">
+        <div class="card">
+          <div class="card-l">
+            <text class="card-name">{{ $item.name }}</text>
+            <text class="card-info">{{ $item.info }}</text>
+          </div>
+          <text class="card-tag">{{ $item.tag }}</text>
+        </div>
+      </list-item>
+    </list>
+
+    <div class="back" @click="back"><text class="btn-t">返回</text></div>
+
+    <!-- 长按删除确认：scrim 与 dialog 都是 .page 的直接子节点（不嵌套定位） -->
+    <div class="scrim" if="{{ confirmIdx >= 0 }}"></div>
+    <div class="dialog {{ square ? 'square' : '' }}" if="{{ confirmIdx >= 0 }}">
+      <text class="dg-title">删除存档？</text>
+      <text class="dg-sub">此操作无法撤销</text>
+      <div class="dg-row">
+        <div class="dg-btn" @click="cancelDelete"><text class="dg-t">取消</text></div>
+        <div class="dg-btn dg-danger" @click="doDelete"><text class="dg-t">删除</text></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+  .page {
+    width: 466px;
+    height: 100%;
+    background-color: #14101a;
+  }
+  .title {
+    position: absolute;
+    left: 0px;
+    top: 50px;
+    width: 466px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #ffd8e6;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .sub {
+    position: absolute;
+    left: 0px;
+    top: 90px;
+    width: 466px;
+    height: 24px;
+    line-height: 24px;
+    font-size: 18px;
+    color: #9c8f9b;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .lst {
+    position: absolute;
+    left: 0px;
+    top: 126px;
+    width: 466px;
+    height: 250px;
+  }
+  .lst.square {
+    height: 338px;
+  }
+  .item {
+    width: 466px;
+    height: 82px;
+    flex-direction: column;
+  }
+  .card {
+    width: 420px;
+    height: 76px;
+    margin-left: 23px;
+    margin-top: 3px;
+    border-radius: 18px;
+    background-color: #241c2c;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .card-l {
+    width: 300px;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .card-name {
+    width: 300px;
+    height: 28px;
+    line-height: 28px;
+    font-size: 24px;
+    color: #ffe6ef;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .card-info {
+    width: 300px;
+    height: 22px;
+    line-height: 22px;
+    margin-top: 4px;
+    font-size: 17px;
+    color: #9c8f9b;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .card-tag {
+    width: 80px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 19px;
+    color: #cf9ec0;
+    text-align: right;
+    lines: 1;
+  }
+  .back {
+    position: absolute;
+    left: 113px;
+    bottom: 24px;
+    width: 240px;
+    height: 52px;
+    border-radius: 26px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-t {
+    font-size: 22px;
+    color: #ffffff;
+  }
+  .scrim {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.72);
+  }
+  .dialog {
+    position: absolute;
+    left: 83px;
+    bottom: 143px;
+    width: 300px;
+    height: 180px;
+    border-radius: 18px;
+    background-color: #241c2c;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 22px;
+  }
+  .dialog.square {
+    bottom: 187px;
+  }
+  .dg-title {
+    width: 260px;
+    height: 34px;
+    line-height: 34px;
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffe6ef;
+    text-align: center;
+    lines: 1;
+  }
+  .dg-sub {
+    width: 260px;
+    height: 26px;
+    line-height: 26px;
+    margin-top: 6px;
+    font-size: 18px;
+    color: #9c8f9b;
+    text-align: center;
+    lines: 1;
+  }
+  .dg-row {
+    width: 260px;
+    height: 52px;
+    margin-top: 20px;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .dg-btn {
+    width: 120px;
+    height: 52px;
+    border-radius: 26px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .dg-danger {
+    background-color: #a8355a;
+  }
+  .dg-t {
+    font-size: 20px;
+    color: #ffffff;
+  }
+</style>

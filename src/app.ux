@@ -1,0 +1,22 @@
+<script>
+/**
+ * GalGod（想成为 Galgame 领域大神！！！）· vivo 蓝河（BlueOS）手表移植版
+ *
+ * 应用入口：只做全局生命周期与错误日志，不承载页面逻辑。
+ * 原工程：https://github.com/mcpotato1123/galgod-band （小米手环 9 Pro / Vela）
+ * 剧本与美术版权归原作「诺提拉观察所」所有；本工程为个人非商业性移植。
+ */
+export default {
+  onCreate() {
+    console.log('[GalGod] app onCreate')
+  },
+  onShow() {},
+  onHide() {},
+  onDestroy() {},
+  onError(error) {
+    try {
+      console.error('[GalGod] app onError: ' + (error && error.message ? error.message : error))
+    } catch (e) {}
+  },
+}
+</script>

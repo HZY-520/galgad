@@ -1,0 +1,317 @@
+{
+  "tool": "tools/test-engine.mjs",
+  "generatedAt": "2026-11-10T11:38:42.084Z",
+  "pass": true,
+  "failures": [],
+  "checks": [
+    {
+      "name": "testCond 条件求值",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "choicesOf 条件选项过滤（真实节点 4797）",
+      "pass": true,
+      "detail": "选项数 2/2/3"
+    },
+    {
+      "name": "executeNode 语义（bg/cs/cg/tint/flags/跳转）",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "renderSprites 三槽位（含 c 归一为 center）",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "chapterIndex / chapterProgress",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "visibleChapters / nextVisibleChapter（未通关 14 / 通关 15）",
+      "pass": true,
+      "detail": "notCleared=14 cleared=15"
+    },
+    {
+      "name": "存档 normalize/apply/describe 边界",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "全 5569 节点顺序执行不越界",
+      "pass": true,
+      "detail": "say=5457 choice=15 end=2 next=95"
+    },
+    {
+      "name": "8 条策略跑全剧本并到达结局",
+      "pass": true,
+      "detail": "8 条策略全部到达结局"
+    },
+    {
+      "name": "3 结局 + Bad End 均可达",
+      "pass": true,
+      "detail": "bad_end, end_ne1, end_ne2, end_te"
+    },
+    {
+      "name": "true_end_finish 通关判定（cleared 与后日谈）",
+      "pass": true,
+      "detail": "cleared=15 notCleared=14"
+    },
+    {
+      "name": "每个 say 节点存档 collect→JSON→normalize→apply 往返一致",
+      "pass": true,
+      "detail": "5457 个 say 节点全部一致"
+    },
+    {
+      "name": "readStoryIndex 读取索引",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "loader 读取全部 44 分块 + 缓存命中不重复读盘",
+      "pass": true,
+      "detail": "44 分块 / 5569 节点"
+    },
+    {
+      "name": "loader trim 淘汰 + prefetch 预读",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "loader 坏分块 / 空 chunk 回调 null",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "chunkOf / chunkPosition 边界",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "storage 设置读写（readJSON/writeJSON/loadSettings 走 stub）",
+      "pass": true,
+      "detail": "ok"
+    }
+  ],
+  "stats": {
+    "nodeCount": 5569,
+    "chunkCount": 44,
+    "chapterCount": 18,
+    "visibleNotCleared": 14,
+    "visibleCleared": 15,
+    "nodeActionCounts": {
+      "say": 5457,
+      "choice": 15,
+      "end": 2,
+      "next": 95
+    },
+    "strategies": [
+      {
+        "name": "S1 总选第一个",
+        "result": "end",
+        "steps": 4268,
+        "endPc": 4345,
+        "badEnd": true,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4"
+        ]
+      },
+      {
+        "name": "S2 总选最后一个",
+        "result": "end",
+        "steps": 4291,
+        "endPc": 4345,
+        "badEnd": true,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4"
+        ]
+      },
+      {
+        "name": "S3 全 flag 拉满 + 真结局",
+        "result": "end",
+        "steps": 5311,
+        "endPc": 5568,
+        "badEnd": false,
+        "trueEndFinish": true,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4",
+          "end_te",
+          "after_story_noctella"
+        ]
+      },
+      {
+        "name": "S4 只拉真结局 flag（bad_end_flag<7）",
+        "result": "end",
+        "steps": 4290,
+        "endPc": 4345,
+        "badEnd": true,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4"
+        ]
+      },
+      {
+        "name": "S5 bad_end_flag 拉满 + 放手（NE2）",
+        "result": "end",
+        "steps": 4768,
+        "endPc": 5568,
+        "badEnd": false,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4",
+          "end_ne2"
+        ]
+      },
+      {
+        "name": "S6 bad_end_flag 拉满 + 诞生（NE1）",
+        "result": "end",
+        "steps": 4810,
+        "endPc": 5568,
+        "badEnd": false,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4",
+          "end_ne1"
+        ]
+      },
+      {
+        "name": "S7 条件选项过滤（flag=3 时第 3 个选项不可见 → 回落第一个）",
+        "result": "end",
+        "steps": 4791,
+        "endPc": 5568,
+        "badEnd": false,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4",
+          "end_ne2"
+        ]
+      },
+      {
+        "name": "S8 确定性伪随机",
+        "result": "end",
+        "steps": 4270,
+        "endPc": 4345,
+        "badEnd": true,
+        "trueEndFinish": false,
+        "chapters": [
+          "1_1",
+          "1_2",
+          "1_3",
+          "1_4",
+          "2_1",
+          "interlude1",
+          "interlude2",
+          "2_2",
+          "2_3",
+          "2_4",
+          "3_1",
+          "3_2",
+          "3_3",
+          "3_4"
+        ]
+      }
+    ],
+    "reachedEndings": [
+      "bad_end",
+      "end_ne1",
+      "end_ne2",
+      "end_te"
+    ],
+    "saveRoundTripCount": 5457
+  }
+}

@@ -1,0 +1,573 @@
+<script>
+/**
+ * CG 鉴赏：9 组解锁列表 + 全屏宽图查看（可左右拖动看被裁掉的部分）。
+ *
+ * 移植自 galgod-band（Vela 版）pages/cg/cg.ux，按 BlueOS 规则重写：
+ *  - Vela 的系统接口全部换成 BlueOS 的 @blueos.* 模块；源工程用的整屏手势事件
+ *    在 BlueOS 上不存在，拖动改由覆盖在 <image> 上的 div 手势层
+ *    @touchstart/@touchmove/@touchend/@touchcancel 实现（BlueOS 的 <image>
+ *    不支持事件；手势层用 rgba(0,0,0,0.02) 背景保证能命中）；
+ *  - 宽图用 common/asset.js 的 wideUri(index)（640×360 资源）显示成 828×466
+ *    显式 px，图片 left 在 [-362, 0] 之间平移，每张图打开/切换后回到中间（-181）；
+ *  - 左右点按热区（宽 60，竖向只占中段 140~340，避让上下边缘的拖动）作为拖动
+ *    失效时的兜底，一次步进 ±121；
+ *  - 列表锁定组与已解锁组共用同一个 <image>，只切换 src（未解锁用
+ *    /common/img/t/lock.png 占位），list-item 内部不做任何定位，DOM 结构完全一致；
+ *  - storage 统一在 onReady / onShow 调用，onInit 只做纯状态；
+ *  - manifest 已为 Gallery 配置 followHand:"disable"：onBackPress 先关查看器再返回。
+ *
+ * 几何按 docs/PORT-SPEC.md §3.5：标题 top 40、副标题 top 78、list top 110
+ * （圆屏高 280 / 方屏 368）、item 92、card 416×84、缩略图 112×63。
+ */
+import router from '@blueos.app.appmanager.router'
+import prompt from '@blueos.window.prompt'
+import { CGG } from '../../common/cglist.js'
+import { wideUri } from '../../common/asset.js'
+import { loadSeen } from '../../common/reader.js'
+import { DESIGN_WIDTH, detectShape, viewportHeight } from '../../common/layout.js'
+
+/** 宽图显示尺寸（设计 px）：资源 640×360 等比放大到 828×466 */
+const BIG_W = 828
+const BIG_H = 466
+/** 可拖动范围：828 - 466 = 362 */
+const PAN_RANGE = BIG_W - DESIGN_WIDTH
+/** 每张图打开时看中间：left = -181 */
+const PAN_START = -Math.round(PAN_RANGE / 2)
+/** 点左右热区的兜底步进：362 / 3 ≈ 121 */
+const PAN_STEP = Math.round(PAN_RANGE / 3)
+/** 位置条：轨道 240，滑块 135（屏幕宽 / 图宽 ≈ 466/828） */
+const TRACK_W = 240
+const TRACK_THUMB_W = 135
+const TRACK_RANGE = TRACK_W - TRACK_THUMB_W
+
+/** 页面级非响应式状态（单实例页面，模块级即可） */
+const st = {
+  groups: [],        // CGG 9 组
+  seen: {},          // 解锁集合：{ 图片下标: 1 }
+  curGroup: -1,      // 当前查看的组下标
+  curPage: 0,        // 当前组内第几张差分
+  cgLeft: PAN_START, // 宽图当前 left（-362..0）
+  imageTop: 0,       // 宽图 top：圆屏 0、方屏 44
+  vh: 466,           // 视口设计高度
+  pressX: null,      // 拖动起点 x（null = 未按住）
+  pressLeft: PAN_START,
+}
+
+/**
+ * 读触摸点 x 坐标：clientX > pageX > x > offsetX。
+ * BlueOS 各版本/模拟器给的字段不完全一致，逐个兜底；只用位移差，绝对值不重要。
+ */
+function readX(e) {
+  if (!e) return null
+  let p = null
+  if (e.touches && e.touches.length) p = e.touches[0]
+  else if (e.changedTouches && e.changedTouches.length) p = e.changedTouches[0]
+  else p = e
+  if (!p) return null
+  if (typeof p.clientX === 'number') return p.clientX
+  if (typeof p.pageX === 'number') return p.pageX
+  if (typeof p.x === 'number') return p.x
+  if (typeof p.offsetX === 'number') return p.offsetX
+  return null
+}
+
+export default {
+  data: {
+    // 列表
+    rows: [],
+    openCount: 0,
+    total: 0,
+    // 查看器
+    viewing: false,
+    bigSrc: '',
+    cgStyle: 'left: -181px; top: 0px; width: 828px; height: 466px;',
+    indStyle: 'left: 0px;',
+    vName: '',
+    pageNo: 1,
+    pageAll: 1,
+    // 方屏运行时类（round 为空串）
+    layoutClass: '',
+  },
+
+  // ---------------------------------------------------------------- 生命周期
+  onInit() {
+    // onInit 只做纯状态：不读 storage、不碰 feature API
+    st.groups = CGG || []
+    st.seen = {}
+    st.curGroup = -1
+    st.curPage = 0
+    st.cgLeft = PAN_START
+    st.pressX = null
+    st.pressLeft = PAN_START
+
+    const shape = detectShape(this.$device)
+    st.vh = viewportHeight(shape)
+    // 宽图 466 高，圆屏贴顶；方屏（设计高 554）上下居中 => top 44
+    st.imageTop = Math.round((st.vh - BIG_H) / 2)
+    this.layoutClass = shape === 'square' ? 'square' : ''
+
+    this.rows = []
+    this.openCount = 0
+    this.total = st.groups.length
+    this.viewing = false
+    this.bigSrc = ''
+    this.vName = ''
+    this.pageNo = 1
+    this.pageAll = 1
+    // 初始大图样式 / 位置条（left -181：中间；圆屏 top 0、方屏 top 44）
+    this.setPan(PAN_START)
+  },
+
+  onReady() {
+    // storage 读取放在 onReady（页面创建完成后再调用 feature API）
+    this.loadSeenAndBuild()
+  },
+
+  onShow() {
+    // 从正文页回来时解锁状态可能已变化，重新读一次
+    this.loadSeenAndBuild()
+  },
+
+  onHide() {
+    st.pressX = null
+  },
+
+  /** followHand = disable 才生效：查看大图时返回键先关查看器 */
+  onBackPress() {
+    if (this.viewing) {
+      this.closeView()
+      return true
+    }
+    router.back()
+    return true
+  },
+
+  // ---------------------------------------------------------------- 列表
+  loadSeenAndBuild() {
+    loadSeen((list) => {
+      const seen = {}
+      for (let i = 0; i < list.length; i++) seen[list[i]] = 1
+      st.seen = seen
+      this.build()
+    })
+  },
+
+  build() {
+    const rows = []
+    let open = 0
+    for (let i = 0; i < st.groups.length; i++) {
+      const g = st.groups[i]
+      // 解锁判据是组长给的 u（原作里看到那张图即整组解锁）
+      const ok = !!st.seen[g.u]
+      if (ok) open++
+      rows.push({
+        th: g.th,
+        // 未解锁组用深色问号占位图（112×63），同一张 <image> 只换 src：
+        // 所有 list-item 的 DOM 结构完全一致，也不需要在 list-item 内部做定位
+        img: ok ? g.th : '/common/img/t/lock.png',
+        n: g.n,
+        ok: ok,
+        st: ok ? (g.im.length + ' 张') : '未解锁',
+        key: 'g' + i,
+      })
+    }
+    this.rows = rows
+    this.openCount = open
+    this.total = st.groups.length
+  },
+
+  open(i) {
+    const g = st.groups[i]
+    if (!g) return
+    if (!st.seen[g.u]) {
+      prompt.showToast({ message: '还没在剧情里看到这一组' })
+      return
+    }
+    st.curGroup = i
+    st.curPage = 0
+    this.vName = g.n
+    this.pageAll = g.im.length
+    this.showPage()
+    this.viewing = true
+  },
+
+  // ---------------------------------------------------------------- 大图 / 平移
+  styleOfLeft(left) {
+    return 'left: ' + left + 'px; top: ' + st.imageTop + 'px; width: ' +
+      BIG_W + 'px; height: ' + BIG_H + 'px;'
+  },
+
+  /** 切换当前差分：重新取宽图 URI，并回到中间位置 */
+  showPage() {
+    const g = st.groups[st.curGroup]
+    if (!g) return
+    this.bigSrc = wideUri(g.im[st.curPage])
+    this.pageNo = st.curPage + 1
+    st.pressX = null
+    this.setPan(PAN_START)
+  },
+
+  /** 平移并刷新图片 style + 底部位置条（left 夹在 [-362, 0]） */
+  setPan(v) {
+    let l = Math.round(Number(v) || 0)
+    if (l > 0) l = 0
+    if (l < -PAN_RANGE) l = -PAN_RANGE
+    st.cgLeft = l
+    this.cgStyle = this.styleOfLeft(l)
+    const ratio = PAN_RANGE > 0 ? (-l / PAN_RANGE) : 0
+    this.indStyle = 'left: ' + Math.round(TRACK_RANGE * ratio) + 'px;'
+  },
+
+  // ---------------------------------------------------------------- 拖动手势层
+  onCgTouchStart(e) {
+    const x = readX(e)
+    if (x === null) return
+    st.pressX = x
+    st.pressLeft = st.cgLeft
+  },
+
+  onCgTouchMove(e) {
+    if (st.pressX === null) return
+    const x = readX(e)
+    if (x === null) return
+    // 1:1 跟手：left = clamp(pressLeft + (x - pressX), -362, 0)
+    this.setPan(st.pressLeft + (x - st.pressX))
+  },
+
+  onCgTouchEnd() {
+    st.pressX = null
+  },
+
+  // ---------------------------------------------------------------- 左右热区兜底
+  panPrev() {
+    this.setPan(st.cgLeft + PAN_STEP)
+  },
+
+  panNext() {
+    this.setPan(st.cgLeft - PAN_STEP)
+  },
+
+  // ---------------------------------------------------------------- 切换差分 / 关闭
+  prev() {
+    const g = st.groups[st.curGroup]
+    if (!g || !g.im.length) return
+    st.curPage = (st.curPage - 1 + g.im.length) % g.im.length
+    this.showPage()
+  },
+
+  next() {
+    const g = st.groups[st.curGroup]
+    if (!g || !g.im.length) return
+    st.curPage = (st.curPage + 1) % g.im.length
+    this.showPage()
+  },
+
+  closeView() {
+    st.pressX = null
+    this.viewing = false
+    this.bigSrc = ''
+    this.vName = ''
+  },
+
+  back() {
+    router.back()
+  },
+}
+</script>
+
+<template>
+  <div class="page">
+    <text class="title">CG 鉴赏</text>
+    <text class="sub">已解锁 {{ openCount }} / {{ total }} 组 · 点按查看</text>
+
+    <list class="lst {{ layoutClass }}" bounces="true" scrollbar="false">
+      <list-item type="row" class="item" for="{{ rows }}" tid="key" @click="open($idx)">
+        <div class="card">
+          <image class="thumb" src="{{ $item.img }}"></image>
+          <text class="nm">{{ $item.n }}</text>
+          <text class="st">{{ $item.st }}</text>
+        </div>
+      </list-item>
+    </list>
+
+    <div class="back" @click="back"><text class="btn-t">返回</text></div>
+
+    <!-- 大图查看：宽图 828×466 显式尺寸，left 由拖动 / 点按改变 -->
+    <div class="viewer" if="{{ viewing }}">
+      <image class="big" src="{{ bigSrc }}" style="{{ cgStyle }}"></image>
+
+      <!-- 手势层覆盖在 image 上（image 本身不支持事件），半透明底保证命中 -->
+      <div class="gesture" @touchstart="onCgTouchStart" @touchmove="onCgTouchMove"
+           @touchend="onCgTouchEnd" @touchcancel="onCgTouchEnd"></div>
+
+      <!-- 左右点按热区：拖动失效时的兜底，一次 121 -->
+      <div class="zone zone-l" @click="panPrev"></div>
+      <div class="zone zone-r" @click="panNext"></div>
+
+      <!-- 顶部信息条：组名 + n / m + 关闭 -->
+      <div class="vtop">
+        <text class="vname">{{ vName }}</text>
+        <text class="vnum">{{ pageNo }} / {{ pageAll }}</text>
+        <div class="vclose" @click="closeView"><text class="vclose-t">关闭</text></div>
+      </div>
+
+      <!-- 底部提示 + 位置条 + 切差分 -->
+      <div class="hintplate"></div>
+      <text class="vhint2">按住画面左右拖动，看被裁掉的部分</text>
+      <div class="track">
+        <div class="thumb2" style="{{ indStyle }}"></div>
+      </div>
+
+      <div class="vbar" if="{{ pageAll > 1 }}">
+        <div class="vbtn" @click="prev"><text class="vbtn-t">‹</text></div>
+        <text class="vhint">换一张差分</text>
+        <div class="vbtn" @click="next"><text class="vbtn-t">›</text></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+  .page {
+    width: 466px;
+    height: 100%;
+    background-color: #14101a;
+  }
+  .title {
+    position: absolute;
+    left: 113px;
+    top: 40px;
+    width: 240px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 26px;
+    font-weight: bold;
+    color: #ffd8e6;
+    text-align: center;
+  }
+  .sub {
+    position: absolute;
+    left: 33px;
+    top: 78px;
+    width: 400px;
+    height: 22px;
+    line-height: 22px;
+    font-size: 16px;
+    color: #9c8f9b;
+    text-align: center;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .lst {
+    position: absolute;
+    left: 0px;
+    top: 110px;
+    width: 466px;
+    height: 280px;
+  }
+  .lst.square {
+    height: 368px;
+  }
+  .item {
+    width: 466px;
+    height: 92px;
+  }
+  .card {
+    width: 416px;
+    height: 84px;
+    margin-left: 25px;
+    margin-top: 4px;
+    border-radius: 18px;
+    background-color: #241c2c;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .thumb {
+    width: 112px;
+    height: 63px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+  .nm {
+    width: 170px;
+    margin-left: 14px;
+    font-size: 21px;
+    color: #ffe6ef;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .st {
+    width: 70px;
+    margin-left: 22px;
+    font-size: 15px;
+    color: #9c8f9b;
+    text-align: right;
+    lines: 1;
+  }
+  .back {
+    position: absolute;
+    left: 113px;
+    bottom: 24px;
+    width: 240px;
+    height: 52px;
+    border-radius: 26px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-t {
+    font-size: 22px;
+    color: #ffffff;
+  }
+  /* 全屏查看器：黑底盖住列表；圆屏整屏高，方屏也是整屏高（宽图上下居中） */
+  .viewer {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 100%;
+    background-color: #000000;
+  }
+  /* 宽高与 left/top 全部由行内 cgStyle 给（显式 px，避免百分比换算问题）；
+     这里再写一份兜底宽高，避免静态校验/真机把未写宽高的 image 按原尺寸绘制 */
+  .big {
+    position: absolute;
+    width: 828px;
+    height: 466px;
+    object-fit: fill;
+  }
+  .gesture {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 466px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+  /* 左右点按热区：宽 60，只放在画面竖向中段（140~340），避免挡住上下边缘的拖动；
+     顶部信息条 / 底部按钮在它之后，仍然可点击 */
+  .zone {
+    position: absolute;
+    top: 140px;
+    width: 60px;
+    height: 200px;
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+  .zone-l {
+    left: 0px;
+  }
+  .zone-r {
+    left: 406px;
+  }
+  .vtop {
+    position: absolute;
+    left: 113px;
+    top: 60px;
+    width: 240px;
+    height: 44px;
+    border-radius: 22px;
+    background-color: rgba(0, 0, 0, 0.6);
+    flex-direction: row;
+    align-items: center;
+    padding-left: 12px;
+    padding-right: 4px;
+  }
+  .vname {
+    width: 112px;
+    font-size: 16px;
+    color: #ffe6ef;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+  .vnum {
+    width: 54px;
+    font-size: 14px;
+    color: #d8cbd2;
+    text-align: center;
+    lines: 1;
+  }
+  .vclose {
+    width: 54px;
+    height: 32px;
+    border-radius: 16px;
+    background-color: rgba(80, 50, 68, 0.94);
+    align-items: center;
+    justify-content: center;
+  }
+  .vclose-t {
+    font-size: 16px;
+    color: #ffe6ef;
+  }
+  /* 底部提示底板：浅色 CG 上纯文字看不清 */
+  .hintplate {
+    position: absolute;
+    left: 79px;
+    bottom: 122px;
+    width: 308px;
+    height: 38px;
+    border-radius: 12px;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+  .vhint2 {
+    position: absolute;
+    left: 0px;
+    bottom: 130px;
+    width: 466px;
+    height: 22px;
+    line-height: 22px;
+    font-size: 15px;
+    color: rgba(232, 222, 230, 0.92);
+    text-align: center;
+    lines: 1;
+  }
+  .track {
+    position: absolute;
+    left: 113px;
+    bottom: 112px;
+    width: 240px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.28);
+  }
+  .thumb2 {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 135px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: #ffd8e6;
+  }
+  .vbar {
+    position: absolute;
+    left: 113px;
+    bottom: 62px;
+    width: 240px;
+    height: 42px;
+    border-radius: 21px;
+    background-color: rgba(0, 0, 0, 0.62);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .vbtn {
+    width: 46px;
+    height: 34px;
+    border-radius: 17px;
+    background-color: #32243a;
+    align-items: center;
+    justify-content: center;
+  }
+  .vbtn-t {
+    font-size: 22px;
+    color: #ffffff;
+  }
+  .vhint {
+    font-size: 14px;
+    color: rgba(226, 214, 224, 0.8);
+  }
+</style>

@@ -1,0 +1,50 @@
+{
+  "tool": "tools/test-reader.mjs",
+  "generatedAt": "2026-11-10T11:38:42.414Z",
+  "pass": true,
+  "failures": [],
+  "checks": [
+    {
+      "name": "paginationMetrics 边界（字号 14-30 / 圆方屏）",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "全 5457 句 × 17 字号 × 圆/方屏分页不变量",
+      "pass": true,
+      "detail": "185538 次分页，平均 1.097 页/句，最多 5 页"
+    },
+    {
+      "name": "normalizeSettings 默认值 / 越界 / 非法值",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "longpressMode 归一化",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "autoDelay 边界（1.2s~12s 夹取）",
+      "pass": true,
+      "detail": "公式 max(1200,min(12000,700+n*ms)) 全部一致"
+    },
+    {
+      "name": "wrapText 标点断行与显式换行保留",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
+      "name": "paginateText 分组",
+      "pass": true,
+      "detail": "ok"
+    }
+  ],
+  "stats": {
+    "sentenceCount": 5457,
+    "paginations": 185538,
+    "avgPages": 1.097,
+    "maxPages": 5,
+    "expectedPaginations": 185538
+  }
+}

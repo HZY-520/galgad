@@ -1,0 +1,1373 @@
+{
+  "tool": "tools/test-pages.mjs",
+  "checks": 222,
+  "failures": 0,
+  "pages": [
+    {
+      "name": "Home",
+      "checks": 21,
+      "failures": 0
+    },
+    {
+      "name": "Saves",
+      "checks": 49,
+      "failures": 0
+    },
+    {
+      "name": "Chapters",
+      "checks": 22,
+      "failures": 0
+    },
+    {
+      "name": "Gallery",
+      "checks": 43,
+      "failures": 0
+    },
+    {
+      "name": "Settings",
+      "checks": 48,
+      "failures": 0
+    },
+    {
+      "name": "About",
+      "checks": 39,
+      "failures": 0
+    }
+  ],
+  "issues": [],
+  "results": [
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "onInit / onReady 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "无自动存档：hasAuto=false、autoText=「——」",
+      "detail": "hasAuto=false autoText=\"——\""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "onShow 读到自动存档后刷新为「第2章」",
+      "detail": "hasAuto=true autoText=\"第2章\""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "onRefresh 在自动存档消失后复位",
+      "detail": "hasAuto=false autoText=\"——\""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "magic 不匹配的自动存档被忽略",
+      "detail": ""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "pc<0 的自动存档被忽略",
+      "detail": ""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "（前置）pOnly 无自动存档",
+      "detail": ""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「开始阅读」→ push /pages/Game（不带参数）",
+      "detail": "{\"type\":\"push\",\"uri\":\"/pages/Game\"}"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "无存档时「继续阅读」退化为开始新游戏（/pages/Game 无 auto 参数）",
+      "detail": "{\"type\":\"push\",\"uri\":\"/pages/Game\"}"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "chapter=2 的自动存档 → autoText「第3章」",
+      "detail": "\"第3章\""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「继续阅读」→ push /pages/Game {auto:\"1\"}",
+      "detail": "{\"type\":\"push\",\"uri\":\"/pages/Game\",\"params\":{\"auto\":\"1\"}}"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "六个入口按钮调用均不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "入口全部走 router.push",
+      "detail": "push,push,push,push,push"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「存档」→ /pages/Saves {mode:\"load\"}",
+      "detail": "{\"type\":\"push\",\"uri\":\"/pages/Saves\",\"params\":{\"mode\":\"load\"}}"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「章节」→ /pages/Chapters",
+      "detail": "/pages/Chapters"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「CG」→ /pages/Gallery",
+      "detail": "/pages/Gallery"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「设置」→ /pages/Settings",
+      "detail": "/pages/Settings"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「关于」→ /pages/About",
+      "detail": "/pages/About"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "主按钮文案随 hasAuto 切换（模板层：开始阅读 / 继续阅读）",
+      "detail": ""
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "「退出」调用 $app.exit() 一次",
+      "detail": "exited=1"
+    },
+    {
+      "page": "Home",
+      "ok": true,
+      "name": "主页全程没有误弹 toast",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "onInit 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "onInit 只做纯状态初始化，不触碰 storage（get/set/delete 均 0 次）",
+      "detail": "[]"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "onReady 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "rows 固定 7 行（自动存档 + 6 槽）",
+      "detail": "rows=7"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "每行 key 唯一且顺序为 auto / slot0..slot5",
+      "detail": "auto,slot0,slot1,slot2,slot3,slot4,slot5"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "第 0 行：自动存档 / tag=读取 / describeSave 描述",
+      "detail": "{\"key\":\"auto\",\"name\":\"自动存档\",\"info\":\"第2章 · 教室里的午后。\",\"tag\":\"读取\"}"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "第 1 行（有存档）：tag=读取 / 存档描述正确",
+      "detail": "{\"key\":\"slot0\",\"name\":\"存档 1\",\"info\":\"第2章 · 月幕下，清辉洒落。\",\"tag\":\"读取\"}"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "第 3 行（槽位 3）描述正确",
+      "detail": "第3章 · 茶餐厅的午后。"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "4 个空槽显示「（空）」",
+      "detail": "4 个"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "空槽 tag 为「空」",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "最后一行为「存档 6」",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "load 模式点第 1 槽 → replace /pages/Game {load:\"0\"}",
+      "detail": "{\"type\":\"replace\",\"uri\":\"/pages/Game\",\"params\":{\"load\":\"0\"}}"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "load 模式点自动存档行 → /pages/Game {auto:\"1\"}",
+      "detail": "{\"type\":\"replace\",\"uri\":\"/pages/Game\",\"params\":{\"auto\":\"1\"}}"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "load 模式点空槽 → toast「该存档为空」且不跳转",
+      "detail": "该存档为空"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "没有自动存档时点自动行 → toast「暂无自动存档」",
+      "detail": "暂无自动存档"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "mode=\"save\" → isSave=true",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "save 模式 onReady 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "pendingSave 读到后立即删除（只在 Game → Saves 之间传递一次）",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "pendingSave 用 storage.delete 清空",
+      "detail": "[{\"op\":\"get\",\"key\":\"pendingSave\"},{\"op\":\"delete\",\"key\":\"pendingSave\"}]"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "save 模式：自动行 tag=自动，手动槽 tag=覆盖",
+      "detail": "自动,覆盖,覆盖,覆盖"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "save 模式点自动行 → toast「自动存档不可覆盖」",
+      "detail": "自动存档不可覆盖"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "自动行在 save 模式不跳转",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "点槽位保存不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "save 模式点第 2 槽 → saves[1] 落盘为 pendingSave 内容",
+      "detail": "{\"pc\":999,\"magic\":\"galgod-band-1\"}"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "覆盖一个槽不影响其它槽位",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "保存成功 toast「已保存到存档 2」",
+      "detail": "已保存到存档 2"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "保存后该行立即重绘为存档描述",
+      "detail": "第3章 · 待保存的进度"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "pendingSave 内容非法 → toast「没有可保存的进度」",
+      "detail": "没有可保存的进度"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "非法 pendingSave 也照样清空",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "（前置）p3 处于 load 模式",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "onRefresh({mode:\"save\"}) 切换为保存模式",
+      "detail": "mode=save isSave=true"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "onRefresh 重置 confirmIdx",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "onRefresh 之后 onShow 重新读取 pendingSave 并清空",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "切换模式后点第 1 槽 → toast「已保存到存档 1」",
+      "detail": "已保存到存档 1"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "长按自动存档行 → toast「自动存档不可删除」且不弹确认框",
+      "detail": "confirmIdx=-1 toast=自动存档不可删除"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "长按第 2 槽 → confirmIdx=2（弹确认框）",
+      "detail": "confirmIdx=2"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "「取消」→ confirmIdx=-1",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "长按后紧跟的 click 被 suppress 吞掉（不会误读档）",
+      "detail": "routes=0 toasts=0"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "suppress 之后的点击恢复正常",
+      "detail": "该存档为空"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "「删除」→ confirmIdx=-1",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "删除后 saves[4] 落盘为 null",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "长按有存档的第 3 槽 → confirmIdx=3",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "删除不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "删除后 saves[2] = null 并落盘",
+      "detail": "null"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "删除不影响其它槽位（saves[0] 保留）",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "删除后列表立即重绘为「（空）」",
+      "detail": "（空）"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "confirmIdx=0 时 doDelete 不删除任何槽位（防御分支）",
+      "detail": ""
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "watch-square → square=true（列表 338 高）",
+      "detail": "square=true"
+    },
+    {
+      "page": "Saves",
+      "ok": true,
+      "name": "「返回」→ router.back()",
+      "detail": "{\"type\":\"back\"}"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "onInit 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "onInit 不触碰 storage / file",
+      "detail": "storage=0 file=0"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "圆屏 square=false",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "onReady 不抛异常（真实读取剧本索引）",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "确实读了真实剧本索引 /common/story/index.json",
+      "detail": "/common/story/index.json"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "未通关：可见 14 章",
+      "detail": "count=14"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "首行 = 第一幕 · 月幕 / start \"0\"",
+      "detail": "{\"key\":\"ch1\",\"no\":\"1\",\"title\":\"第一幕 · 月幕\",\"mark\":\"\",\"start\":\"0\"}"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "第 14 行 = 第三幕 · 天选试",
+      "detail": "第三幕 · 天选试"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "没有自动存档时不显示「▶」",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "3 个结局章与未解锁的后日谈都不出现",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "自动存档 pc=210 → 「第一幕 · 教室」标 ▶",
+      "detail": "1:第一幕 · 教室"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "「▶」全文只有一处（只在当前章）",
+      "detail": "1 处"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "通关（cleared.ok=1）：可见 15 章（+ 后日谈）",
+      "detail": "count=15"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "第 15 行 = 后日谈 · 诺提拉",
+      "detail": "后日谈 · 诺提拉"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "点第 1 章 → replace /pages/Game {at:\"0\"}",
+      "detail": "{\"type\":\"replace\",\"uri\":\"/pages/Game\",\"params\":{\"at\":\"0\"}}"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "点第 4 章 → at 为真实 start（721）",
+      "detail": "{\"at\":\"721\"}"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "点越界行不跳转、不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "「返回」→ router.back()",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "剧本索引读不到时不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "索引读取失败 → 一行错误提示",
+      "detail": "{\"key\":\"err\",\"no\":\"!\",\"title\":\"读取剧本索引失败\",\"mark\":\"\",\"start\":\"0\"}"
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "错误行点按不跳转（starts 为空）",
+      "detail": ""
+    },
+    {
+      "page": "Chapters",
+      "ok": true,
+      "name": "watch-square → square=true 且仍为 15 章",
+      "detail": "square=true count=15"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "onInit 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "onInit 不触碰 storage",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "圆屏 layoutClass 为空串",
+      "detail": "\"\""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "onInit 大图初始样式：left -181（看中间）/ top 0（圆屏）",
+      "detail": "left: -181px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "onReady 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "列表 9 组",
+      "detail": "rows=9 total=9"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "cgSeen 为空 → 解锁 0 组",
+      "detail": "openCount=0"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "全部未解锁：占位图 lock.png + 「未解锁」",
+      "detail": "{\"th\":\"/common/img/t/g0.png\",\"img\":\"/common/img/t/lock.png\",\"n\":\"政客\",\"ok\":false,\"st\":\"未解锁\",\"key\":\"g0\"}"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "组名来自 cglist（政客 … 诺提拉）",
+      "detail": "政客 … 诺提拉"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "点未解锁组 → toast 且不打开查看器",
+      "detail": "还没在剧情里看到这一组"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "cgSeen=[108,111,93] → 解锁 3 组",
+      "detail": "openCount=3"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "解锁组：缩略图 + 差分张数「2 张」",
+      "detail": "{\"th\":\"/common/img/t/g0.png\",\"img\":\"/common/img/t/g0.png\",\"n\":\"政客\",\"ok\":true,\"st\":\"2 张\",\"key\":\"g0\"}"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "第 2/3 组张数正确（10 / 3）",
+      "detail": "10 张 / 3 张"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "未写入 cgSeen 的组仍然锁定",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "已解锁组点开 → viewing=true",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "bigSrc 指向 /common/img/w/ 宽图",
+      "detail": "/common/img/w/sd_001.png"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "bigSrc 不是 /common/img/c/ 原图",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "pageAll=2 / pageNo=1（政客组 2 张差分）",
+      "detail": "1/2"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "查看器标题为组名「政客」",
+      "detail": "政客"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "打开后回到中间位置（left -181）",
+      "detail": "left: -181px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "setPan(50) 上夹到 0",
+      "detail": "left: 0px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "setPan(-999) 下夹到 -362",
+      "detail": "left: -362px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "setPan(-181) 位置条滑块居中（left 53）",
+      "detail": "left: 53px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "setPan(-362) 位置条滑块到最右（left 105）",
+      "detail": "left: 105px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "setPan 边界夹取不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "按住拖动 60px → left -181+60 = -121",
+      "detail": "left: -121px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "松手后 onCgTouchMove 不再改变位置",
+      "detail": "left: -121px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "没有 touchstart 时 onCgTouchMove 被忽略（pressX 为 null）",
+      "detail": "left: -181px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "next → 第 2 张差分（sd_002）",
+      "detail": "/common/img/w/sd_002.png"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "换差分后自动回到中间",
+      "detail": "left: -181px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "next 到末尾后循环回第 1 张",
+      "detail": "/common/img/w/sd_001.png"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "prev 从第 1 张循环到最后一张",
+      "detail": "2/2"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "换差分循环不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "panPrev 步进 +121（-181 → -60）",
+      "detail": "left: -60px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "panNext 步进 -121（-181 → -302）",
+      "detail": "left: -302px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "panNext 再次步进夹到 -362",
+      "detail": "left: -362px; top: 0px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "查看中按返回：先关闭查看器",
+      "detail": "viewing=false"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "关闭查看器的返回不触发路由",
+      "detail": "[]"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "不在查看时按返回 → router.back()",
+      "detail": "[{\"type\":\"back\"}]"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "closeView 关闭查看器并清空大图",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "「返回」按钮 → router.back()",
+      "detail": ""
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "watch-square → layoutClass=\"square\"",
+      "detail": "square"
+    },
+    {
+      "page": "Gallery",
+      "ok": true,
+      "name": "方屏宽图上下居中 top=44（(554-466)/2）",
+      "detail": "left: -181px; top: 44px; width: 828px; height: 466px;"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onInit 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onInit 不触碰 storage",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "圆屏 layoutClass 为空串",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onInit 先用默认值渲染（字号 20 / 速度 28 / 自动播放「关闭」）",
+      "detail": "20 / 28 / 关闭"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onReady 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "读回字号 22",
+      "detail": "22"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "speed=0 → 「瞬间」",
+      "detail": "瞬间"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "autoMs=0 → 「关闭」",
+      "detail": "关闭"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "预览行内样式随字号（22px / 行高 26px）",
+      "detail": "font-size: 22px; line-height: 26px;"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "屏幕常亮：keepOn=true → 「开」选中",
+      "detail": "关:pill 开:pill-on"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "长按三态：隐藏/快进/关闭，当前 hide 选中",
+      "detail": "隐藏:pill-on 快进:pill 关闭:pill"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "字号提示含 14~30",
+      "detail": "字号 14~30 px，显示的数字就是 px"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "pickKeep(0) → 「关」选中",
+      "detail": "pill-on,pill"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "pickKeep(1) → 「开」选中",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "pickLp(1) → 「快进」选中",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "pickLp(2) → 「关闭」选中",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "pickLp(0) → 「隐藏」选中",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "三态开关切换不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "字号下限夹到 14",
+      "detail": "14"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "字号上限夹到 30",
+      "detail": "30"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "字号 30 时预览行高 34",
+      "detail": "font-size: 30px; line-height: 34px;"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "字号步进不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "速度上限夹到 120",
+      "detail": "120"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "速度下限 0 → 「瞬间」",
+      "detail": "瞬间"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "速度步进不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "自动播放上限夹到 200",
+      "detail": "200"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "自动播放下限 0 → 「关闭」",
+      "detail": "关闭"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "自动播放步进不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "连点 3 次后（<300ms）一次都没写 storage（防抖生效）",
+      "detail": "set=0"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "299ms 时仍未写盘",
+      "detail": "set=0"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "300ms 后只写盘一次",
+      "detail": "set=1"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "防抖定时器触发后不再残留",
+      "detail": "pending=0"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "写盘内容是最新值（size=23）",
+      "detail": "{\"size\":23,\"speed\":0,\"autoMs\":0,\"keepOn\":true,\"longpress\":\"hide\"}"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "（前置）flush 前还没写盘",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "flush() 立即写盘",
+      "detail": "set=1"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "flush() 取消防抖定时器",
+      "detail": "pending=0"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "reset() toast「已恢复默认设置」",
+      "detail": "已恢复默认设置"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "reset() 后文案回到默认（20 / 28 / 关闭）",
+      "detail": "20 / 28 / 关闭"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "reset() 后 keepOn=true、longpress=off 选中",
+      "detail": "pill,pill-on | pill,pill,pill-on"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "reset() 立即把默认值写盘",
+      "detail": "{\"size\":20,\"speed\":28,\"autoMs\":0,\"keepOn\":true,\"longpress\":\"off\"}"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "reset() 后没有残留防抖定时器",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "「返回」→ router.back()",
+      "detail": "[{\"type\":\"back\"}]"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "返回前 flush 写入最新 longpress=fast",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onHide 立即 flush 写盘",
+      "detail": "set=1"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onHide 写入 keepOn=false",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "onDestroy 立即 flush 写盘且无残留定时器",
+      "detail": "set=1 pending=0"
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "还没读到用户设置时 flush 不写盘（避免默认值覆盖旧设置）",
+      "detail": ""
+    },
+    {
+      "page": "Settings",
+      "ok": true,
+      "name": "watch-square → layoutClass=\"square\"",
+      "detail": "square"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "onInit 不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "onInit 不触碰 storage",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "版本号 1.0.0（与 manifest 一致）",
+      "detail": "1.0.0"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "初始状态：圆屏 / 彩蛋关闭",
+      "detail": "square=false egg=false fish=false"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "正文断行后行数合理",
+      "detail": "rows=78"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "每一行都不超过 CPL=15 个字",
+      "detail": "max=15"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "四个小节标题齐全（故事梗概 / 结局 / 版权信息 / 开源协议）",
+      "detail": "故事梗概/结局/版权信息/开源协议"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "空行（r-g）不带文字",
+      "detail": "15 行空行"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "首行为小节「故事梗概」",
+      "detail": "{\"key\":\"r0\",\"c\":\"r-s\",\"t\":\"故事梗概\"}"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "正文含「诺提拉」（后日谈小节）",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "行样式只用 r-s / r-p / r-g",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 1 次点击无提示",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 3 次点击仍未开彩蛋（dots 空）",
+      "detail": "\"\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 4 次 → 「·」",
+      "detail": "\"·\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 5 次 → 「··」",
+      "detail": "\"··\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 6 次 → 「···」",
+      "detail": "\"···\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 7 次 → 打开彩蛋菜单并清空提示",
+      "detail": "eggOpen=true dots=\"\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "2 秒内连点 7 次开彩蛋不抛异常",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "超过 2 秒后计数重置（第 4 次点击仍无提示）",
+      "detail": "\"\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "重置后重新从 1 数起：第 4 次才出现「·」",
+      "detail": "\"·\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "重置后仍能靠 7 连点开彩蛋",
+      "detail": "eggOpen=true"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "closeEgg 关闭彩蛋菜单",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "unlockAfter → storage「cleared」写入 {ok:1}",
+      "detail": "{\"ok\":1,\"at\":1700000002100}"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "cleared.at 使用当前时间戳",
+      "detail": "at=1700000002100 now=1700000002100"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "解锁后关闭彩蛋菜单",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "解锁后日谈 toast 正确",
+      "detail": "已解锁「后日谈 · 诺提拉」"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "unlockCg → cgSeen 写入去重后的 32 个图片下标",
+      "detail": "len=32"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "cgSeen 没有重复下标",
+      "detail": "unique=32"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "cgSeen 覆盖各组的解锁图（93 / 108 / 126）",
+      "detail": ""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "解锁全部 CG toast 含数量",
+      "detail": "已解锁全部 CG（32 张）"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "openFish 打开小剧场（fishIdx=0）",
+      "detail": "fish=true egg=false idx=0"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "第 1 句是旁白（fishName 为空）",
+      "detail": "\"（口袋里还剩最后一包小鱼干。）\""
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "fishHint 形如「n / 30」（1 / 30）",
+      "detail": "1 / 30"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "点一下 → 第 2 句（Yui / 2 / 30）",
+      "detail": "Yui 2 / 30"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "走到第 30 句时仍在剧场内（30 / 30）",
+      "detail": "idx=29 hint=30 / 30 open=true"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "走完 30 句 → 回彩蛋菜单（fishIdx=30、eggOpen=true）",
+      "detail": "idx=30 fish=false egg=true"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "（保持）最后一条提示为 30 / 30",
+      "detail": "30 / 30"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "「返回」→ router.back()",
+      "detail": "[{\"type\":\"back\"}]"
+    },
+    {
+      "page": "About",
+      "ok": true,
+      "name": "watch-square → square=true（列表 368 高）",
+      "detail": "square=true"
+    }
+  ],
+  "generatedAt": "2026-11-10T11:38:42.847Z"
+}

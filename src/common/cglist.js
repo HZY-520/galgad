@@ -1,0 +1,3 @@
+// 由 tools/gen_story.py 自动生成，请勿手改
+// 分组与解锁条件取自原作 screens/gallery.rpy
+export const CGG = [{"n":"政客","th":"/common/img/t/g0.png","u":108,"im":[108,109]},{"n":"林曦 · 教室","th":"/common/img/t/g1.png","u":111,"im":[111,112,113,114,115,116,117,118,119,120]},{"n":"小涟","th":"/common/img/t/g2.png","u":93,"im":[93,94,95]},{"n":"球场","th":"/common/img/t/g3.png","u":126,"im":[126]},{"n":"林曦 · 冰激凌","th":"/common/img/t/g4.png","u":121,"im":[121,122,123,124,125]},{"n":"林曦 · 推倒","th":"/common/img/t/g5.png","u":96,"im":[96,97]},{"n":"江晚晴 · 雨","th":"/common/img/t/g6.png","u":98,"im":[98]},{"n":"林曦 · 告白","th":"/common/img/t/g7.png","u":99,"im":[99,100,101,102,103,104,105]},{"n":"诺提拉","th":"/common/img/t/g8.png","u":106,"im":[106]}]

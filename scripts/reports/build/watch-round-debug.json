@@ -1,0 +1,99 @@
+{
+  "tool": "tools/build.mjs",
+  "packer": "D:\\BlueOSStudio\\resources\\app\\extensions\\blueos-debugger\\node_modules\\blueos-pack\\bin\\index.js",
+  "packerVersion": "1.0.12-beta.13",
+  "device": "watch-round",
+  "mode": "debug",
+  "command": "D:\\BlueOSStudio\\resources\\app\\extensions\\blueos-debugger\\node_modules\\blueos-pack\\bin\\index.js build --device-type watch-round -f",
+  "startedAt": "2026-11-10T11:38:43.452Z",
+  "elapsedMs": 9666,
+  "exitCode": 0,
+  "signal": null,
+  "hasSuccessMarker": true,
+  "contentCheckEnabled": true,
+  "entryOnly": false,
+  "rpk": {
+    "file": "dist/watch-round/debug/galgad.lico.debug.1.0.0.rpk",
+    "size": 15787719,
+    "sizeText": "15.06 MB",
+    "fresh": true,
+    "mtime": "2026-11-10T11:38:53.050Z"
+  },
+  "rpkContents": {
+    "pass": true,
+    "errors": [],
+    "warnings": [],
+    "stats": {
+      "rpkBytes": 15787719,
+      "outerEntries": [
+        "META-INF/",
+        "META-INF/CERT",
+        "icon.vug",
+        "manifest.json",
+        "galgad.lico.vru",
+        "META-INF/build.txt"
+      ],
+      "rootIcon": true,
+      "buildManifest": {
+        "package": "galgad.lico",
+        "versionName": "1.0.0",
+        "entry": "pages/Home",
+        "pages": [
+          "pages/Home",
+          "pages/Game",
+          "pages/Saves",
+          "pages/Chapters",
+          "pages/Gallery",
+          "pages/Settings",
+          "pages/About"
+        ],
+        "features": [
+          "system.storage",
+          "system.file",
+          "system.prompt",
+          "system.brightness",
+          "blueos.app.app"
+        ]
+      },
+      "srcFeatures": [
+        "blueos.storage.storage",
+        "blueos.storage.file",
+        "blueos.window.prompt",
+        "blueos.hardware.display.brightness",
+        "blueos.app.app"
+      ],
+      "pages": [
+        "pages/Home",
+        "pages/Game",
+        "pages/Saves",
+        "pages/Chapters",
+        "pages/Gallery",
+        "pages/Settings",
+        "pages/About"
+      ],
+      "features": [
+        "system.storage",
+        "system.file",
+        "system.prompt",
+        "system.brightness",
+        "blueos.app.app"
+      ],
+      "vruFormat": "vru",
+      "vruEntryCount": 429,
+      "pageFilesFound": 21,
+      "pageFilesExpected": 21,
+      "storyFound": 45,
+      "storyExpected": 45,
+      "imageFound": 171,
+      "imageExpected": 171,
+      "imageCount": {
+        "commonImg": 169,
+        "assetsImages": 2
+      },
+      "rpkMiB": 15.06
+    }
+  },
+  "errorLines": [],
+  "pass": true,
+  "logFile": "scripts/reports/build/watch-round-debug.log"
+}

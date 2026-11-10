@@ -1,0 +1,17 @@
+{
+  "tool": "tools/lint-timers.js",
+  "rule": "BlueOS IDE feature-api validateClearTimer (apiParser.getTimerInfo token pairing) + 页面禁用直接定时器",
+  "ideParser": "D:/BlueOSStudio/resources/app/extensions/blueos-language-features/server/dist/modes/script/hap/apiParser.js",
+  "scannedRoot": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src",
+  "filesScanned": 8,
+  "callStats": {
+    "setTimeout": 0,
+    "clearTimeout": 0,
+    "setInterval": 0,
+    "clearInterval": 0
+  },
+  "errors": [],
+  "warnings": [],
+  "pass": true,
+  "generatedAt": "2026-11-10T11:38:39.828Z"
+}
