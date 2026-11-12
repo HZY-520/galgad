@@ -1,6 +1,6 @@
 {
   "tool": "tools/test-game-page.mjs",
-  "checks": 46,
+  "checks": 56,
   "failures": 0,
   "results": [
     {
@@ -9,15 +9,35 @@
     },
     {
       "ok": true,
-      "name": "模板存在顶部「≡」菜单按钮 .menu-fab（真机反馈：没有菜单入口）"
+      "name": "根节点带 id=\"game-root\"（供 getBoundingClientRect 实测视口）"
     },
     {
       "ok": true,
-      "name": "「≡」按钮在 DOM 顺序上位于点击层之后（否则点击被点击层吃掉）"
+      "name": "顶部「≡」阅读菜单按钮已移除（真机反馈遮挡字幕）"
     },
     {
       "ok": true,
-      "name": "「≡」按钮绑定 @click=\"openMenu\""
+      "name": "阅读菜单使用全屏 scrim 层"
+    },
+    {
+      "ok": true,
+      "name": "阅读菜单按钮由 menuRows 列表渲染（流式列，非嵌套绝对定位）"
+    },
+    {
+      "ok": true,
+      "name": "菜单按钮放在滚动容器里（12 项可滚动）"
+    },
+    {
+      "ok": true,
+      "name": "正文/面板/说话人绑定行内 style（lineStyle）→ 字号变化自适应"
+    },
+    {
+      "ok": true,
+      "name": "正文/面板/说话人绑定行内 style（panelStyle）→ 字号变化自适应"
+    },
+    {
+      "ok": true,
+      "name": "正文/面板/说话人绑定行内 style（nameStyle）→ 字号变化自适应"
     },
     {
       "ok": true,
@@ -63,7 +83,7 @@
     },
     {
       "ok": true,
-      "name": "点击推进 4854 步不抛异常"
+      "name": "点击推进 4795 步不抛异常"
     },
     {
       "ok": true,
@@ -109,13 +129,22 @@
     },
     {
       "ok": true,
+      "name": "菜单条目表 menuRows 共 12 项（滚动列表渲染源）",
+      "detail": "rows=12"
+    },
+    {
+      "ok": true,
+      "name": "pickMenu 按索引分发 12 项（含越界）均不抛异常"
+    },
+    {
+      "ok": true,
       "name": "「主页」按钮走 router.replace 回主页",
       "detail": "push:/pages/Chapters , push:/pages/Gallery , push:/pages/Settings , replace:/pages/Home"
     },
     {
       "ok": true,
       "name": "「保存/读取」跳转存档页",
-      "detail": "push:/pages/Saves , push:/pages/Saves"
+      "detail": "push:/pages/Saves , push:/pages/Saves , push:/pages/Saves , push:/pages/Saves"
     },
     {
       "ok": true,
@@ -141,7 +170,7 @@
     {
       "ok": true,
       "name": "默认字号 20 生效",
-      "detail": "font-size: 20px; line-height: 24px;"
+      "detail": "font-size: 20px; line-height: 28px; height: 168px; lines: 6;"
     },
     {
       "ok": true,
@@ -150,12 +179,27 @@
     {
       "ok": true,
       "name": "字号 30 已被应用到正文行内样式（onShow 生效）",
-      "detail": "font-size: 30px; line-height: 34px;"
+      "detail": "font-size: 30px; line-height: 42px; height: 168px; lines: 4;"
+    },
+    {
+      "ok": true,
+      "name": "字号 30 的行数与正文高度同步重算（lines 4 / 168px，行高 42）",
+      "detail": "font-size: 30px; line-height: 42px; height: 168px; lines: 4;"
+    },
+    {
+      "ok": true,
+      "name": "字号 30 的面板高度同步重算（198px = 18+168+12）",
+      "detail": "height: 198px;"
     },
     {
       "ok": true,
       "name": "重排后仍然渲染出完整字幕",
       "detail": "\"月幕下，清辉洒落。\""
+    },
+    {
+      "ok": true,
+      "name": "字号 14：6 行 × 行高 20 = 120px 正文框（分页与渲染同源）",
+      "detail": "font-size: 14px; line-height: 20px; height: 120px; lines: 6;"
     },
     {
       "ok": true,
@@ -209,5 +253,5 @@
       "detail": "pending=0"
     }
   ],
-  "generatedAt": "2026-11-10T11:38:42.693Z"
+  "generatedAt": "2026-11-12T12:32:55.053Z"
 }

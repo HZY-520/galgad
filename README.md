@@ -91,7 +91,7 @@ galgad/
 | 背景动效 | 672 宽全景 + 10fps 定时器平移 | 静态 cover（低性能手表省 CPU/电量，见 docs/PORT-NOTES.md） |
 | CG 鉴赏 | 854 宽图 touchmove 拖动 | 640×360 宽图按 828×466 显式 px 显示 + 触摸拖动/热区兜底 |
 | 设置 | slider ×3 + 开关 | −/＋ 步进 + 药丸开关（蓝河实机更稳） |
-| 手势 | `onswipe`/`onlongpress` | 顶部「≡」按钮 + 下滑手势开菜单；`touchstart/touchend` 自算右滑快退；长按用 longpress + 自计时快进 |
+| 手势 | `onswipe`/`onlongpress` | **上/下滑手势 + 返回手势开阅读菜单**（顶部「≡」按钮已按真机反馈移除）；`touchstart/touchend` 自算右滑快退；长按用 longpress + 自计时快进 |
 | 资源 | 源尺寸调色板 PNG | 按 466 重裁 + 8 位调色板（图片总量 6.4 MB，rpk 15.05 MiB） |
 
 实机差异规避（参考工程 galgame/galgaoshou 的 vivo WATCH GT 2 实机经验）：
@@ -115,7 +115,7 @@ npm run verify    # 以上 + watch-round/watch-square 构建 + rpk 内容断言
 | `tools/validate-pages.mjs` | 7 页三段式/路由/事件与组件白名单/CSS 红线/几何常量/版本号 | PASS（7/7） |
 | `tools/test-engine.mjs` | 全节点执行、8 条策略、4 结局可达、通关判定、存档往返 | PASS（18/18） |
 | `tools/test-reader.mjs` | 5457 句 × 17 字号 × 圆/方屏分页不变量、设置归一化 | PASS（7/7） |
-| `tools/test-game-page.mjs` | Game 页运行时全链路（点击/分页/选项/结局/菜单按钮/手势/重排/读档） | PASS（46/46） |
+| `tools/test-game-page.mjs` | Game 页运行时全链路（模板结构/点击/分页自适应/选项/结局/菜单 12 项/手势/重排/读档） | PASS（56/56） |
 | `tools/test-pages.mjs` | 其余 6 页运行时全链路（Home/Saves/Chapters/Gallery/Settings/About） | PASS |
 | `tools/build.mjs` | 官方 blueos-pack 双设备构建 + rpk 内容断言 | PASS（2/2，15.05 MiB） |
 

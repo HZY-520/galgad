@@ -2,7 +2,7 @@
   "name": "galgad",
   "version": "1.1.0",
   "packageManager": "pnpm@^9.9.0",
-  "description": "GalGod（想成为Galgame领域大神）· vivo BlueOS 手表移植版",
+  "description": "GalGod（想成为 Galgame 领域大神！！！）· vivo 蓝河（BlueOS）手表移植版",
   "private": true,
   "scripts": {
     "gen": "node ./scripts/gen/index.js",

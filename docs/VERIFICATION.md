@@ -226,3 +226,83 @@ BlueOS 3.0）与圆屏模拟器各回归一次：
 - 平台/源码/参考分析：`docs/refs/{blueos-platform,source-galgod,reference-port}.md`
 - 移植说明：`README.md`、`docs/PORT-NOTES.md`、`docs/PORT-SPEC.md`
 - 版面预览图：`docs/preview/game-round.png`、`docs/preview/game-square.png`（按 layout.js 合成）
+
+## 12. 真机回归修复（2026-11-12，第三轮反馈）
+
+反馈三件事：**① Game 页的「≡」菜单按钮要去掉；② 阅读菜单在实机上 12 个按钮全挤在一起；
+③ 长句行数多时对白显示不全，要自适应，并把对话框贴到最底部、顶部栏贴到最上方。**
+
+### 12.1 去掉「≡」按钮 + 阅读菜单扁平化
+
+- **根因**：菜单用的是「9 个绝对定位行 + 每行 2 个按钮」的嵌套定位结构
+  （`.menu-btn` 是 `.menu-layer` / `.menu-row` 的子节点）。参考工程实机定量证明：
+  真机会把「absolute 子元素套在定位容器里」的宽度按密度**再换算一次**
+  （`real-device-issues.md`：real/sim≈0.46），按钮宽度被砍半、文字溢出，
+  看起来就是整片菜单挤成一团。模拟器不会复现。
+- **修法**：菜单改成和 Settings / About 一致的「全屏 scrim + 标题 + 外层 absolute 容器 +
+  内层 `<scroll>`」，12 个按钮是 flex 列里的**流式节点**，不再逐个 `top` 定位；
+  每个条目 320×52、间距 8，超出可滚动。选项层同样拆成 `scrim + 外层 div + scroll`。
+- 顶部「≡」按钮整体删除（`MENU_BTN` 几何从 `layout.js` 移除）：真机上它压住顶部字幕/信息条。
+  菜单入口保留两条：**屏幕上下滑**（`checkSwipe` 纵向滑动）与**返回手势**（`onBackPress`）。
+
+### 12.2 对白自适应：行数 / 行高 / 框高同源
+
+- **根因**：旧版面把三个数字写死在三处——分页按 `TEXT.height(126) / lineHeight(24) = 5` 行排、
+  CSS 正文框 `height: 126px`、`lines: 6`。实机行框比 `line-height` 略高（字体行距/行框不同），
+  5 行实际占 130~140px，末行就顶出 126px 的框被裁掉；字号越大越明显。
+- **修法**：`layout.readerLayout(size, shape)` 一次算出全部纵向数字并产出三个行内 style：
+  `lineStyle`（font-size / line-height / **height** / **lines**）、`panelStyle`（面板高）、
+  `nameStyle`（说话人条 bottom）。行高改为 `round(字号 × 1.4)`（与参考工程一致），
+  `height = linesPerPage × lineHeight`，`panelHeight = 18 + 正文高 + 12`（上留白 18 > 说话人条半高 15，说话人条不会压到首行）。
+  分页与渲染从此共用同一组数字，**任何字号下正文框都正好装下 N 行**。
+- 纵向全部 `bottom` 锚定：方屏面板 `bottom 8`、顶栏 `top 8`（真正贴底/贴顶）；
+  圆屏受物理安全圆约束（正文末行角距圆心必须 ≤215），只能到面板 `bottom 72`、
+  顶栏 `top 44`，再往下/往上就会裁字，属物理极限而不是没改。
+- 顺带修掉同类隐患：Settings 预览卡片高度 104 → **136**（正文区 70 → 92），
+  否则字号 30（行高 42）时预览的 2 行也被裁。
+
+| 项（字号 20） | 旧·圆屏 | 新·圆屏 | 旧·方屏 | 新·方屏 |
+| --- | --- | --- | --- | --- |
+| 面板 | 340×186 @ bottom 66 | **340×198 @ bottom 72** | 410×186 @ bottom 20 | **410×198 @ bottom 8（贴底）** |
+| 正文区 | 300×126 @ bottom 84 | **300×168 @ bottom 84** | 340×140 @ bottom 26 | **340×168 @ bottom 20** |
+| 行高 / 每页行数 | 24 / 5 行 | **28 / 6 行** | 24 / 5 行 | **28 / 6 行** |
+| 顶部信息条 | 208×30 @ top 62 | **200×28 @ top 44** | 300×34 @ top 12 | **420×34 @ top 8（贴顶）** |
+| 菜单按钮 | 42×42 @ 312,58 | **删除** | 44×44 @ 410,8 | **删除** |
+| 屏型判定 | 仅 `$device.deviceType` | **+ 视口宽高比实测校正** | 同左 | 同左 |
+
+另外，Game 页 `onShow` 会用根节点 `getBoundingClientRect` 实测一次视口宽高比，
+经 `shapeFromViewport()`（设计高 ≥505 → 方屏）自我校正并重排——老 ROM 的
+`deviceType` 只报 `watch` 时也不会再套用圆屏版面（这是「实机上位置全不对」的潜在来源）。
+
+### 12.3 新增 / 加强门禁
+
+- `tools/validate-pages.mjs`（Game 页）：
+  - 静态 CSS 必须等于 `readerLayout(20, shape)` 的版面（面板/说话人/正文/HUD/▼/立绘逐值核对）；
+  - 正文/面板/说话人必须绑定行内 `style="{{ lineStyle | panelStyle | nameStyle }}"`；
+  - **圆屏安全区对全部 17 档字号**校验正文块四角、面板上沿、说话人条、HUD；
+  - **分页与渲染同源**：`textHeight === linesPerPage × lineHeight`、`textHeight ≤ 可用高`、
+    `panelHeight === 上留白 + 正文 + 下留白`；
+  - **禁止嵌套定位容器**：任何 `position: absolute` 的元素必须是 `.page` 的直接子节点（逐节点扫描）；
+  - 模板**不得残留 `menu-fab`**，且脚本里必须有 `openMenu()` 调用（菜单不能失去入口）。
+- `tools/test-game-page.mjs`：模板结构断言改为 9 条（点击层 / `id="game-root"` / 无 `menu-fab` /
+  scrim / `menuRows` 列表 / 滚动容器 / 三个行内 style 绑定），新增 `menuRows` 12 项与
+  `pickMenu` 越界分发、字号 14/30 的 `lines`/`height`/`panelStyle` 同步重算（共 **56** 项）。
+- `tools/test-reader.mjs`：新增 `readerLayout` 不变量（行数×行高=框高、不超可用高、
+  圆屏全部字号的正文块角距圆心 ≤215），行高断言改为 `lineHeightOf(size)`。
+- `tools/render_layout_preview.py`：跟随新几何（去掉 MENU_BTN、行高 1.4、面板高按行数算）。
+
+### 12.4 复验
+
+- `npm run check`：8 个工具全 PASS（lint-timers / check-methods / validate-story /
+  validate-pages / test-engine / test-reader / test-game-page 56 项 / test-pages 222 项）。
+- 双设备重建：`watch-round`、`watch-square` 均 `[INFO] finish compile`、`[ERROR]` 0 条，
+  rpk 各 **15.07 MiB**，内容断言 21/21 页面、45/45 剧本、171/171 图片。
+- 编译产物核查（`build/watch-square/pages/Game/`）：
+  `index.css.json` 中已无 `menu-fab` 且含 `.menu-item/.menu-rows`；
+  `index.template.json` 中 `$style` 绑定为 `panelStyle / nameStyle / lineStyle`，
+  菜单 `$repeat: menuRows` 且父节点是 `scroll`。
+- 几何自检（字号 20）：圆屏面板 63..403 × 196..394、正文 83..383 × 214..382、
+  说话人 83..383 × 181..211、HUD 133..333 × 44..72；方屏面板 28..438 × 348..546、
+  正文 63..403 × 366..534、说话人 63..403 × 332..364、HUD 23..443 × 8..42。全部关键点到圆心距离 ≤215（圆屏），
+  正文完全在面板内、▼ 在面板右侧留白内不压正文。
+- 版面预览图已按新几何重绘：`docs/preview/game-round.png`、`docs/preview/game-square.png`。

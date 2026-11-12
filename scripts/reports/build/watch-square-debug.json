@@ -5,8 +5,8 @@
   "device": "watch-square",
   "mode": "debug",
   "command": "D:\\BlueOSStudio\\resources\\app\\extensions\\blueos-debugger\\node_modules\\blueos-pack\\bin\\index.js build --device-type watch-square -f",
-  "startedAt": "2026-11-10T11:38:53.872Z",
-  "elapsedMs": 9727,
+  "startedAt": "2026-11-12T12:32:05.123Z",
+  "elapsedMs": 8603,
   "exitCode": 0,
   "signal": null,
   "hasSuccessMarker": true,
@@ -14,17 +14,17 @@
   "entryOnly": false,
   "rpk": {
     "file": "dist/watch-square/debug/galgad.lico.debug.1.0.0.rpk",
-    "size": 15787714,
-    "sizeText": "15.06 MB",
+    "size": 15799762,
+    "sizeText": "15.07 MB",
     "fresh": true,
-    "mtime": "2026-11-10T11:39:03.534Z"
+    "mtime": "2026-11-12T12:32:13.695Z"
   },
   "rpkContents": {
     "pass": true,
     "errors": [],
     "warnings": [],
     "stats": {
-      "rpkBytes": 15787714,
+      "rpkBytes": 15799762,
       "outerEntries": [
         "META-INF/",
         "META-INF/CERT",
@@ -90,7 +90,7 @@
         "commonImg": 169,
         "assetsImages": 2
       },
-      "rpkMiB": 15.06
+      "rpkMiB": 15.07
     }
   },
   "errorLines": [],

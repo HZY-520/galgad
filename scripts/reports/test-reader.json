@@ -1,6 +1,6 @@
 {
   "tool": "tools/test-reader.mjs",
-  "generatedAt": "2026-11-10T11:38:42.414Z",
+  "generatedAt": "2026-11-12T12:32:54.890Z",
   "pass": true,
   "failures": [],
   "checks": [
@@ -10,9 +10,14 @@
       "detail": "ok"
     },
     {
+      "name": "readerLayout 自适应（行数×行高 = 渲染框高，且不超可用高度 / 圆屏安全圆）",
+      "pass": true,
+      "detail": "ok"
+    },
+    {
       "name": "全 5457 句 × 17 字号 × 圆/方屏分页不变量",
       "pass": true,
-      "detail": "185538 次分页，平均 1.097 页/句，最多 5 页"
+      "detail": "185538 次分页，平均 1.066 页/句，最多 4 页"
     },
     {
       "name": "normalizeSettings 默认值 / 越界 / 非法值",
@@ -43,8 +48,8 @@
   "stats": {
     "sentenceCount": 5457,
     "paginations": 185538,
-    "avgPages": 1.097,
-    "maxPages": 5,
+    "avgPages": 1.066,
+    "maxPages": 4,
     "expectedPaginations": 185538
   }
 }

@@ -1,951 +1,1238 @@
 <script>
-/**
- * 正文阅读器（核心页）：剧本指令流、舞台渲染、分页打字机、选项分支、
- * 自动播放/快进/快退、自动存档、CG 解锁、阅读菜单、屏幕常亮。
- *
- * 移植自 galgod-band（Vela 版）pages/game/game.ux，按 BlueOS 规则重写：
- *  - @system.* -> @blueos.*；无 onswipe / scrollTo 依赖，手势用 touchstart/touchend 坐标算。
- *  - 纯逻辑抽到 common/engine.js（可在 Node 里跑全剧情测试），本页只做 UI 与调度。
- *  - data 只放模板要绑定的字段；剧本、缓存、定时器句柄放模块级非响应式 st（性能规范）。
- *  - 所有 setTimeout/setInterval 统一经 armTimer/armInterval 收口，onDestroy 全部清理。
- *  - 不再做背景逐帧平移（低性能手表省 CPU/电量），改为静态 cover 背景。
- */
-import router from '@blueos.app.appmanager.router'
-import prompt from '@blueos.window.prompt'
-import brightness from '@blueos.hardware.display.brightness'
-import {
-  createState,
-  executeNode,
-  renderSprites,
-  collectSave,
-  applySave,
-  chapterProgress,
-  nextVisibleChapter,
-  SAVE_MAGIC,
-} from '../../common/engine.js'
-import { readStoryIndex, createStoryLoader, chunkOf } from '../../common/story.js'
-import { imageUri } from '../../common/asset.js'
-import {
-  DEFAULT_SETTINGS,
-  normalizeSettings,
-  longpressMode,
-  autoDelay,
-  paginateText,
-  loadSettings,
-  saveSettings,
-  loadAutoSave,
-  saveAutoSave,
-  loadSeen,
-  saveSeen,
-  loadCleared,
-  markCleared,
-  loadSaves,
-  writeJSON,
-  armTimer,
-  disarmTimer,
-  armInterval,
-  disarmInterval,
-} from '../../common/reader.js'
-import {
-  detectShape,
-  paginationMetrics,
-  textStyle,
-} from '../../common/layout.js'
+  /**
+   * 正文阅读器（核心页）：剧本指令流、舞台渲染、分页打字机、选项分支、
+   * 自动播放/快进/快退、自动存档、CG 解锁、阅读菜单、屏幕常亮。
+   *
+   * 移植自 galgod-band（Vela 版）pages/game/game.ux，按 BlueOS 规则重写：
+   *  - @system.* -> @blueos.*；无 onswipe / scrollTo 依赖，手势用 touchstart/touchend 坐标算。
+   *  - 纯逻辑抽到 common/engine.js（可在 Node 里跑全剧情测试），本页只做 UI 与调度。
+   *  - data 只放模板要绑定的字段；剧本、缓存、定时器句柄放模块级非响应式 st（性能规范）。
+   *  - 所有 setTimeout/setInterval 统一经 armTimer/armInterval 收口，onDestroy 全部清理。
+   *  - 不再做背景逐帧平移（低性能手表省 CPU/电量），改为静态 cover 背景。
+   *
+   * 2026-11 真机回归改造（本轮）：
+   *  1) 去掉顶部「≡」阅读菜单按钮（实机上挤住字幕且遮挡顶部信息），菜单入口改为
+   *     下滑/上滑手势 + 返回手势；菜单面板改为「全屏 scrim + 滚动列表」。
+   *  2) 菜单按钮不再用嵌套定位容器：真机对「absolute 子元素再套 absolute 容器」会把
+   *     宽度按密度二次换算（参考工程实机定量 real/sim≈0.46），12 个按钮会全部挤成一团。
+   *     现在按钮是 flex 列里的普通流式节点，容器（.menu-wrap）与滚动区都挂在 .page 下。
+   *  3) 对话框自适应：字号相关的高度全部由 common/layout.js 的 readerLayout() 算出并绑到
+   *     行内 style（font-size / line-height / height / lines），分页与渲染共用同一组数字，
+   *     长句再也不会因为「CSS 框比 N 行矮」被裁掉末行。
+   *  4) 对话框贴近屏幕最底部、顶部信息条贴近最上方：方屏面板 bottom 8 / 顶栏 top 8；
+   *     圆屏受物理安全圆限制（正文末行角距圆心必须 ≤215），面板 bottom 72 / 顶栏 top 44，
+   *     这已经是圆屏不裁字的极限。
+   *  5) 视口实测兜底：onShow 用 getBoundingClientRect 量一次宽高比，若 deviceType 给错
+   *     （老 ROM 只报 'watch'），按实测比例自动切圆/方屏并重排。
+   */
+  import router from '@blueos.app.appmanager.router'
+  import prompt from '@blueos.window.prompt'
+  import brightness from '@blueos.hardware.display.brightness'
+  import {
+    createState,
+    executeNode,
+    renderSprites,
+    collectSave,
+    applySave,
+    chapterProgress,
+    nextVisibleChapter,
+    SAVE_MAGIC,
+  } from '../../common/engine.js'
+  import {
+    readStoryIndex,
+    createStoryLoader,
+    chunkOf,
+  } from '../../common/story.js'
+  import {
+    DEFAULT_SETTINGS,
+    longpressMode,
+    autoDelay,
+    paginateText,
+    loadSettings,
+    saveSettings,
+    loadAutoSave,
+    saveAutoSave,
+    loadSeen,
+    saveSeen,
+    loadCleared,
+    markCleared,
+    loadSaves,
+    writeJSON,
+    armTimer,
+    disarmTimer,
+    armInterval,
+    disarmInterval,
+  } from '../../common/reader.js'
+  import {
+    detectShape,
+    shapeFromViewport,
+    readerLayout,
+    DESIGN_WIDTH,
+  } from '../../common/layout.js'
 
-const SAVE_MAGIC_LOCAL = SAVE_MAGIC
-const AUTO_DEFAULT = 90       // 菜单里打开自动播放时给的默认停留（毫秒/字）
-const HOLD_MS = 450           // 按住多久算长按快进
-const HOLD_MAX_MS = 20000     // 兜底：按住超过这么久强制停快进
-const SWIPE_MIN = 36          // 自己判滑动的最小位移（比系统手势灵敏）
-const SWIPE_MS = 800          // 且要在这么久之内
-const TYPE_TICK_MS = 50       // 打字机时间校正循环间隔
-const WATCHDOG_MS = 8000      // 首次加载看门狗
+  const SAVE_MAGIC_LOCAL = SAVE_MAGIC
+  const AUTO_DEFAULT = 90 // 菜单里打开自动播放时给的默认停留（毫秒/字）
+  const HOLD_MS = 450 // 按住多久算长按快进
+  const HOLD_MAX_MS = 20000 // 兜底：按住超过这么久强制停快进
+  const SWIPE_MIN = 36 // 自己判滑动的最小位移（设计 px，比系统手势灵敏）
+  const SWIPE_MS = 800 // 且要在这么久之内
+  const TYPE_TICK_MS = 50 // 打字机时间校正循环间隔
+  const WATCHDOG_MS = 8000 // 首次加载看门狗
 
-/** 页面级非响应式运行时（模块级，避免被响应式代理；单实例页面不会互相污染） */
-const st = {
-  story: null,
-  loader: null,
-  chunkNodes: null,
-  chunkStart: -1,
-  state: createState(),
-  settings: Object.assign({}, DEFAULT_SETTINGS),
-  shape: 'round',
-  vh: 466,
-  pages: [['']],
-  pageIdx: 0,
-  rawText: '',
-  fullText: '',
-  typing: 0,
-  typingToken: 0,
-  typingAt: 0,
-  canTap: false,
-  hist: [],
-  seenIdx: {},
-  seenList: [],
-  cleared: false,
-  advanceCount: 0,
-  lockTap: 0,
-  holdFast: false,
-  swipeY0: null,
-  swipeX0: null,
-  swipeT0: 0,
-  booted: false,
-  loadToken: 0,
-  dbg: '',
-  // 定时器句柄（0 = 无）
-  timer: 0,
-  autoTimer: 0,
-  saveTimer: 0,
-  seenTimer: 0,
-  holdTimer: 0,
-  holdMax: 0,
-  rewindTimer: 0,
-  watchdog: 0,
-}
-
-function readX(e) {
-  if (!e) return null
-  let p = null
-  if (e.touches && e.touches.length) p = e.touches[0]
-  else if (e.changedTouches && e.changedTouches.length) p = e.changedTouches[0]
-  else p = e
-  if (!p) return null
-  if (typeof p.clientX === 'number') return p.clientX
-  if (typeof p.pageX === 'number') return p.pageX
-  if (typeof p.x === 'number') return p.x
-  if (typeof p.offsetX === 'number') return p.offsetX
-  return null
-}
-
-function readY(e) {
-  if (!e) return null
-  let p = null
-  if (e.touches && e.touches.length) p = e.touches[0]
-  else if (e.changedTouches && e.changedTouches.length) p = e.changedTouches[0]
-  else p = e
-  if (!p) return null
-  if (typeof p.clientY === 'number') return p.clientY
-  if (typeof p.pageY === 'number') return p.pageY
-  if (typeof p.y === 'number') return p.y
-  if (typeof p.offsetY === 'number') return p.offsetY
-  return null
-}
-
-export default {
-  data: {
-    // 路由参数（BlueOS 在 data 中声明同名属性接收，值统一为 String）
-    at: '',
-    load: '',
-    auto: '',
-    // 舞台
-    bgSrc: '',
-    showBlack: true,
-    showWhite: false,
-    spL: '',
-    spC: '',
-    spR: '',
-    cgSrc: '',
-    tint: '',
-    // 对白
-    speaker: '',
-    pageText: '',
+  /** 页面级非响应式运行时（模块级，避免被响应式代理；单实例页面不会互相污染） */
+  const st = {
+    story: null,
+    loader: null,
+    chunkNodes: null,
+    chunkStart: -1,
+    state: createState(),
+    settings: Object.assign({}, DEFAULT_SETTINGS),
+    shape: 'round',
+    geo: null,
+    pages: [['']],
+    pageIdx: 0,
+    rawText: '',
+    fullText: '',
+    typing: 0,
+    typingToken: 0,
+    typingAt: 0,
     canTap: false,
-    lineStyle: 'font-size: 20px; line-height: 24px;',
-    panelClass: '',
-    layoutClass: '',
-    // 顶部信息 / 诊断
-    chapterTitle: '——',
-    progress: '0%',
-    badge: '',
-    // 交互层
-    choices: [],
-    menu: false,
-    uiHidden: false,
-    endText: '',
-    autoOn: false,
-    fastOn: false,
-    autoLabel: '自动播放：关',
-    fastLabel: '快进：关',
-  },
+    hist: [],
+    seenIdx: {},
+    seenList: [],
+    cleared: false,
+    advanceCount: 0,
+    lockTap: 0,
+    holdFast: false,
+    swipeY0: null,
+    swipeX0: null,
+    swipeT0: 0,
+    booted: false,
+    loadToken: 0,
+    dbg: '',
+    measured: false, // 视口是否已经实测过（一次就够）
+    coordScale: 1, // 触摸物理 px -> 设计 px 的换算系数（实测修正）
+    // 定时器句柄（0 = 无）
+    timer: 0,
+    autoTimer: 0,
+    saveTimer: 0,
+    seenTimer: 0,
+    holdTimer: 0,
+    holdMax: 0,
+    rewindTimer: 0,
+    watchdog: 0,
+  }
 
-  // ---------------------------------------------------------------- 生命周期
-  onInit() {
-    st.state = createState()
-    st.settings = Object.assign({}, DEFAULT_SETTINGS)
-    st.shape = detectShape(this.$device)
-    st.vh = st.shape === 'square' ? 554 : 466
-    this.layoutClass = st.shape === 'square' ? 'square' : ''
-    this.lineStyle = textStyle(st.settings.size)
-    this.badge = ''
-    this.menu = false
-    this.uiHidden = false
-    this.endText = ''
-    this.choices = []
-    this.pageText = ''
-    this.speaker = ''
-    this.chapterTitle = '——'
-    this.progress = '0%'
-    this.autoOn = false
-    this.fastOn = false
-    this.autoLabel = '自动播放：关'
-    this.fastLabel = '快进：关'
-    st.loadToken += 1
-  },
+  function readX(e) {
+    if (!e) return null
+    let p = null
+    if (e.touches && e.touches.length) p = e.touches[0]
+    else if (e.changedTouches && e.changedTouches.length)
+      p = e.changedTouches[0]
+    else p = e
+    if (!p) return null
+    if (typeof p.clientX === 'number') return p.clientX
+    if (typeof p.pageX === 'number') return p.pageX
+    if (typeof p.x === 'number') return p.x
+    if (typeof p.offsetX === 'number') return p.offsetX
+    return null
+  }
 
-  onReady() {
-    // 页面创建完成后再调用 feature API（storage / file）；onInit 里不调用
-    loadCleared((ok) => { st.cleared = ok })
-    loadSeen((list) => {
-      st.seenList = list.slice()
-      for (let i = 0; i < st.seenList.length; i++) st.seenIdx[st.seenList[i]] = 1
-    })
-    this.startReading()
-  },
+  function readY(e) {
+    if (!e) return null
+    let p = null
+    if (e.touches && e.touches.length) p = e.touches[0]
+    else if (e.changedTouches && e.changedTouches.length)
+      p = e.changedTouches[0]
+    else p = e
+    if (!p) return null
+    if (typeof p.clientY === 'number') return p.clientY
+    if (typeof p.pageY === 'number') return p.pageY
+    if (typeof p.y === 'number') return p.y
+    if (typeof p.offsetY === 'number') return p.offsetY
+    return null
+  }
 
-  /** singleTask 再次打开：按新参数重新初始化 */
-  onRefresh(query) {
-    const p = query || {}
-    this.at = p.at === undefined || p.at === null ? '' : String(p.at)
-    this.load = p.load === undefined || p.load === null ? '' : String(p.load)
-    this.auto = p.auto === undefined || p.auto === null ? '' : String(p.auto)
-    this.startReading()
-  },
+  export default {
+    data: {
+      // 路由参数（BlueOS 在 data 中声明同名属性接收，值统一为 String）
+      at: '',
+      load: '',
+      auto: '',
+      // 舞台
+      bgSrc: '',
+      showBlack: true,
+      showWhite: false,
+      spL: '',
+      spC: '',
+      spR: '',
+      cgSrc: '',
+      tint: '',
+      // 对白
+      speaker: '',
+      pageText: '',
+      canTap: false,
+      lineStyle: 'font-size: 20px; line-height: 28px; height: 168px; lines: 6;',
+      panelStyle: 'height: 198px;',
+      nameStyle: 'bottom: 255px;',
+      panelClass: '',
+      layoutClass: '',
+      // 顶部信息 / 诊断
+      chapterTitle: '——',
+      progress: '0%',
+      badge: '',
+      // 交互层
+      choices: [],
+      menu: false,
+      menuRows: [],
+      uiHidden: false,
+      endText: '',
+      autoOn: false,
+      fastOn: false,
+      autoLabel: '自动播放：关',
+      fastLabel: '快进：关',
+    },
 
-  onShow() {
-    // onHide 会关掉屏幕常亮，回到前台无条件恢复（不依赖是否已读完索引）
-    this.setKeepScreenOn(!!(st.settings && st.settings.keepOn))
-    if (!st.booted) return
-    // 从设置页回来：重新读设置；字号变化时按新字号重排当前这句
-    this.loadSettingsAndApply((changed) => {
-      if (changed && st.rawText) this.reflow()
-      this.applyAutoLabels()
-    })
-  },
+    // ---------------------------------------------------------------- 生命周期
+    onInit() {
+      st.state = createState()
+      st.settings = Object.assign({}, DEFAULT_SETTINGS)
+      st.shape = detectShape(this.$device)
+      st.measured = false
+      st.coordScale = 1
+      this.layoutClass = st.shape === 'square' ? 'square' : ''
+      this.autoLabel = '自动播放：关'
+      this.fastLabel = '快进：关'
+      this.applyGeometry()
+      this.buildMenuRows()
+      this.badge = ''
+      this.menu = false
+      this.uiHidden = false
+      this.endText = ''
+      this.choices = []
+      this.pageText = ''
+      this.speaker = ''
+      this.chapterTitle = '——'
+      this.progress = '0%'
+      this.autoOn = false
+      this.fastOn = false
+      st.loadToken += 1
+    },
 
-  onHide() {
-    this.clearAllTimers()
-    this.setKeepScreenOn(false)
-    this.flushAutoSave()
-    this.flushSeen()
-    if (st.holdFast) { st.holdFast = false; this.fastOn = false }
-  },
+    onReady() {
+      // 页面创建完成后再调用 feature API（storage / file）；onInit 里不调用
+      loadCleared((ok) => {
+        st.cleared = ok
+      })
+      loadSeen((list) => {
+        st.seenList = list.slice()
+        for (let i = 0; i < st.seenList.length; i++)
+          st.seenIdx[st.seenList[i]] = 1
+      })
+      this.startReading()
+    },
 
-  onDestroy() {
-    st.loadToken += 1
-    this.clearAllTimers()
-    this.setKeepScreenOn(false)
-    this.flushAutoSave()
-    this.flushSeen()
-    if (st.loader) st.loader.reset()
-    st.story = null
-    st.loader = null
-    st.chunkNodes = null
-    st.chunkStart = -1
-  },
+    /** singleTask 再次打开：按新参数重新初始化 */
+    onRefresh(query) {
+      const p = query || {}
+      this.at = p.at === undefined || p.at === null ? '' : String(p.at)
+      this.load = p.load === undefined || p.load === null ? '' : String(p.load)
+      this.auto = p.auto === undefined || p.auto === null ? '' : String(p.auto)
+      this.startReading()
+    },
 
-  /** followHand = disable 才生效：返回手势 = 打开/关闭阅读菜单，不会误退出 */
-  onBackPress() {
-    if (this.menu) { this.menu = false; return true }
-    if (this.endText) { this.goHome(); return true }
-    if (this.choices.length) return true
-    this.openMenu()
-    return true
-  },
+    onShow() {
+      // onHide 会关掉屏幕常亮，回到前台无条件恢复（不依赖是否已读完索引）
+      this.setKeepScreenOn(!!(st.settings && st.settings.keepOn))
+      // 真机兜底：按实测视口宽高比校正圆/方屏（老 ROM 的 deviceType 可能只报 'watch'）
+      this.measureViewport()
+      if (!st.booted) return
+      // 从设置页回来：重新读设置；字号变化时按新字号重排当前这句
+      this.loadSettingsAndApply((changed) => {
+        if (changed && st.rawText) this.reflow()
+        this.applyAutoLabels()
+      })
+    },
 
-  // ---------------------------------------------------------------- 启动 / 读档
-  startReading() {
-    const token = ++st.loadToken
-    st.booted = false
-    st.firstSayLogged = false
-    st.state = createState()
-    st.pages = [['']]
-    st.pageIdx = 0
-    st.rawText = ''
-    st.fullText = ''
-    st.canTap = false
-    st.hist = []
-    st.advanceCount = 0
-    st.chunkNodes = null
-    st.chunkStart = -1
-    st.typingToken += 1
-    if (st.loader) st.loader.reset()
-    st.loader = createStoryLoader()
-    this.pageText = ''
-    this.speaker = ''
-    this.choices = []
-    this.menu = false
-    this.uiHidden = false
-    this.endText = ''
-    this.badge = '载入设置…'
-    this.clearAllTimers()
-    this.setKeepScreenOn(true)
+    onHide() {
+      this.clearAllTimers()
+      this.setKeepScreenOn(false)
+      this.flushAutoSave()
+      this.flushSeen()
+      if (st.holdFast) {
+        st.holdFast = false
+        this.fastOn = false
+      }
+    },
 
-    this.loadSettingsAndApply(() => {
-      if (token !== st.loadToken) return
-      this.badge = '载入剧本索引…'
-      readStoryIndex((idx, err) => {
+    onDestroy() {
+      st.loadToken += 1
+      this.clearAllTimers()
+      this.setKeepScreenOn(false)
+      this.flushAutoSave()
+      this.flushSeen()
+      if (st.loader) st.loader.reset()
+      st.story = null
+      st.loader = null
+      st.chunkNodes = null
+      st.chunkStart = -1
+    },
+
+    /** followHand = disable 才生效：返回手势 = 打开/关闭阅读菜单，不会误退出 */
+    onBackPress() {
+      if (this.menu) {
+        this.menu = false
+        return true
+      }
+      if (this.endText) {
+        this.goHome()
+        return true
+      }
+      if (this.choices.length) return true
+      this.openMenu()
+      return true
+    },
+
+    // ---------------------------------------------------------------- 视口实测
+    /**
+     * 用页面根节点的实测宽高比推断屏型，并算出触摸坐标的换算系数。
+     * 只在第一次成功时生效（st.measured），失败就退回 $device，不会反复测量。
+     */
+    measureViewport() {
+      if (st.measured) return
+      let el = null
+      try {
+        el = this.$element('game-root')
+      } catch (e) {
+        el = null
+      }
+      if (!el || typeof el.getBoundingClientRect !== 'function') return
+      try {
+        el.getBoundingClientRect({
+          success: (rect) => {
+            if (this.$valid === false) return
+            st.measured = true
+            const w = Number(rect && rect.width)
+            const h = Number(rect && rect.height)
+            if (!(w > 0) || !(h > 0)) return
+            // 触摸坐标是物理 px，样式 px 是设计单位：换算后再和自己的阈值比较
+            st.coordScale = DESIGN_WIDTH / w
+            this.log(
+              '视口 ' +
+                Math.round(w) +
+                'x' +
+                Math.round(h) +
+                ' (' +
+                st.shape +
+                ')'
+            )
+            const shape = shapeFromViewport(w, h)
+            if (shape === st.shape) return
+            st.shape = shape
+            this.layoutClass = shape === 'square' ? 'square' : ''
+            this.applyGeometry()
+            if (st.rawText) this.reflow()
+            this.log('实测校正屏型 → ' + shape)
+          },
+          fail: () => {
+            st.measured = true
+          },
+        })
+      } catch (e) {
+        st.measured = true
+      }
+    },
+
+    // ---------------------------------------------------------------- 版面
+    /** 按当前字号 + 屏型算出对白/面板/说话人的行内 style（唯一来源：layout.readerLayout） */
+    applyGeometry() {
+      const g = readerLayout(st.settings.size, st.shape)
+      st.geo = g
+      this.lineStyle = g.lineStyle
+      this.panelStyle = g.panelStyle
+      this.nameStyle = g.nameStyle
+    },
+
+    metrics() {
+      // 分页与渲染必须用同一组数字（否则实机会出现「分页 6 行、框只装得下 5 行」裁字）
+      const g =
+        st.geo &&
+        st.geo.fontSize === st.settings.size &&
+        st.geo.shape === st.shape
+          ? st.geo
+          : readerLayout(st.settings.size, st.shape)
+      return g
+    },
+
+    paginate(text) {
+      const m = this.metrics()
+      return paginateText(text, m.charsPerLine, m.linesPerPage)
+    },
+
+    reflow() {
+      if (!st.rawText) return
+      st.pages = this.paginate(st.rawText)
+      st.pageIdx = 0
+      this.showPageText(st.pages[0] || [''])
+      st.typingToken += 1
+      st.canTap = true
+      this.canTap = true
+    },
+
+    showPageText(lines) {
+      st.fullText = (lines || ['']).join('\n')
+      st.typing = st.fullText.length
+      this.pageText = st.fullText
+    },
+
+    // ---------------------------------------------------------------- 启动 / 读档
+    startReading() {
+      const token = ++st.loadToken
+      st.booted = false
+      st.firstSayLogged = false
+      st.state = createState()
+      st.pages = [['']]
+      st.pageIdx = 0
+      st.rawText = ''
+      st.fullText = ''
+      st.canTap = false
+      st.hist = []
+      st.advanceCount = 0
+      st.chunkNodes = null
+      st.chunkStart = -1
+      st.typingToken += 1
+      if (st.loader) st.loader.reset()
+      st.loader = createStoryLoader()
+      this.pageText = ''
+      this.speaker = ''
+      this.choices = []
+      this.menu = false
+      this.uiHidden = false
+      this.endText = ''
+      this.badge = '载入设置…'
+      this.clearAllTimers()
+      this.setKeepScreenOn(true)
+
+      this.loadSettingsAndApply(() => {
         if (token !== st.loadToken) return
-        if (!idx) {
-          this.fail('读剧本索引', err)
+        this.badge = '载入剧本索引…'
+        readStoryIndex((idx, err) => {
+          if (token !== st.loadToken) return
+          if (!idx) {
+            this.fail('读剧本索引', err)
+            return
+          }
+          st.story = idx
+          // 索引就绪即可认为「页面已启动」：之后 onShow（从设置页/存档页回来）才会
+          // 重新读取设置并应用到当前这句（字号变化 → reflow）。
+          st.booted = true
+          this.log(
+            '索引 OK：节点 ' + idx.nodeCount + '，分块 ' + idx.chunks.length
+          )
+          this.afterIndex(token)
+        })
+      })
+    },
+
+    afterIndex(token) {
+      if (token !== st.loadToken) return
+      const at =
+        this.at === undefined || this.at === null ? '' : String(this.at)
+      const load =
+        this.load === undefined || this.load === null ? '' : String(this.load)
+      const auto =
+        this.auto === undefined || this.auto === null ? '' : String(this.auto)
+      this.log('参数 at=' + at + ' load=' + load + ' auto=' + auto)
+      if (at !== '') {
+        let target = parseInt(at, 10)
+        if (!(target >= 0)) target = 0
+        this.goto(target)
+        return
+      }
+      loadAutoSave((data) => {
+        if (token !== st.loadToken) return
+        if (load !== '') {
+          this.restoreFromSlot(parseInt(load, 10), token)
           return
         }
-        st.story = idx
-        // 索引就绪即可认为「页面已启动」：之后 onShow（从设置页/存档页回来）才会
-        // 重新读取设置并应用到当前这句（字号变化 → reflow）。
-        st.booted = true
-        this.log('索引 OK：节点 ' + idx.nodeCount + '，分块 ' + idx.chunks.length)
-        this.afterIndex(token)
+        if (auto === '1' && data && data.magic === SAVE_MAGIC_LOCAL) {
+          this.log('从自动存档继续')
+          this.applySaveData(data, token)
+          return
+        }
+        this.log('从序章开始')
+        this.goto(0)
       })
-    })
-  },
+    },
 
-  afterIndex(token) {
-    if (token !== st.loadToken) return
-    const at = this.at === undefined || this.at === null ? '' : String(this.at)
-    const load = this.load === undefined || this.load === null ? '' : String(this.load)
-    const auto = this.auto === undefined || this.auto === null ? '' : String(this.auto)
-    this.log('参数 at=' + at + ' load=' + load + ' auto=' + auto)
-    if (at !== '') {
-      let target = parseInt(at, 10)
-      if (!(target >= 0)) target = 0
-      this.goto(target)
-      return
-    }
-    loadAutoSave((data) => {
-      if (token !== st.loadToken) return
-      if (load !== '') {
-        this.restoreFromSlot(parseInt(load, 10), token)
-        return
-      }
-      if (auto === '1' && data && data.magic === SAVE_MAGIC_LOCAL) {
-        this.log('从自动存档继续')
-        this.applySaveData(data, token)
-        return
-      }
-      this.log('从序章开始')
-      this.goto(0)
-    })
-  },
-
-  restoreFromSlot(slot, token) {
-    if (!(slot >= 0)) { this.goto(0); return }
-    this.log('读取存档槽 ' + slot)
-    loadSaves((list) => {
-      if (token !== undefined && token !== st.loadToken) return
-      const data = list[slot]
-      if (!data || data.magic !== SAVE_MAGIC_LOCAL) {
-        this.badge = '存档不存在'
+    restoreFromSlot(slot, token) {
+      if (!(slot >= 0)) {
         this.goto(0)
         return
       }
-      this.applySaveData(data, token)
-    })
-  },
+      this.log('读取存档槽 ' + slot)
+      loadSaves((list) => {
+        if (token !== undefined && token !== st.loadToken) return
+        const data = list[slot]
+        if (!data || data.magic !== SAVE_MAGIC_LOCAL) {
+          this.badge = '存档不存在'
+          this.goto(0)
+          return
+        }
+        this.applySaveData(data, token)
+      })
+    },
 
-  applySaveData(data, token) {
-    if (token !== undefined && token !== st.loadToken) return
-    if (!applySave(st.state, data)) { this.goto(0); return }
-    this.syncVisuals()
-    this.updateHud()
-    this.goto(st.state.pc)
-  },
-
-  // ---------------------------------------------------------------- 设置 / 常亮
-  loadSettingsAndApply(done) {
-    const before = st.settings ? st.settings.size : 0
-    loadSettings((s) => {
-      const prevSize = before
-      st.settings = s
-      this.lineStyle = textStyle(s.size)
-      this.applyAutoLabels()
-      this.setKeepScreenOn(!!s.keepOn)
-      if (done) done(st.settings.size !== prevSize)
-    })
-  },
-
-  applyAutoLabels() {
-    const s = st.settings || {}
-    this.autoOn = s.autoMs > 0
-    this.fastOn = !!s.fast
-    this.autoLabel = '自动播放：' + (s.autoMs > 0 ? '开' : '关')
-    this.fastLabel = '快进：' + (s.fast ? '开' : '关')
-  },
-
-  setKeepScreenOn(on) {
-    try {
-      brightness.setKeepScreenOn({ keepScreenOn: !!on })
-    } catch (e) {
-      this.log('屏幕常亮设置失败: ' + (e && e.message ? e.message : e))
-    }
-  },
-
-  // ---------------------------------------------------------------- 日志
-  log(msg, force) {
-    st.dbg = msg
-    if (force || !st.fullText) this.badge = msg
-    try { console.log('[GalGod] ' + msg) } catch (e) {}
-  },
-
-  fail(where, err) {
-    const msg = where + ' 出错: ' + (err && err.message ? err.message : err)
-    this.badge = msg
-    try { console.error('[GalGod] ' + msg) } catch (e) {}
-  },
-
-  // ---------------------------------------------------------------- 节点调度
-  inChunk(index) {
-    return !!st.chunkNodes && st.chunkStart >= 0 &&
-      index >= st.chunkStart && index < st.chunkStart + st.chunkNodes.length
-  },
-
-  goto(index) {
-    try {
-      if (!st.story) { this.badge = '剧本未载入'; return }
-      if (!(index >= 0) || index >= st.story.nodeCount) {
-        this.badge = '节点越界 ' + index
-        this.finishAll()
+    applySaveData(data, token) {
+      if (token !== undefined && token !== st.loadToken) return
+      if (!applySave(st.state, data)) {
+        this.goto(0)
         return
       }
-      st.state.pc = index
-      if (this.inChunk(index)) { this.step(); return }
-      const chunk = chunkOf(index, st.story.chunks)
-      if (!chunk) { this.badge = '找不到节点 ' + index + ' 所属分块'; return }
-      this.log('读取分块 ' + chunk.file + ' …')
-      st.loader.readChunk(chunk, (nodes) => {
-        if (!nodes) { this.fail('读分块', chunk.file); return }
-        st.chunkNodes = nodes
-        st.chunkStart = chunk.start
-        this.step()
+      this.syncVisuals()
+      this.updateHud()
+      this.goto(st.state.pc)
+    },
+
+    // ---------------------------------------------------------------- 设置 / 常亮
+    loadSettingsAndApply(done) {
+      const before = st.settings ? st.settings.size : 0
+      loadSettings((s) => {
+        const prevSize = before
+        st.settings = s
+        this.applyGeometry()
+        this.applyAutoLabels()
+        this.setKeepScreenOn(!!s.keepOn)
+        if (done) done(st.settings.size !== prevSize)
       })
-    } catch (e) {
-      this.fail('goto(' + index + ')', e)
-    }
-  },
+    },
 
-  step() {
-    try {
+    applyAutoLabels() {
+      const s = st.settings || {}
+      this.autoOn = s.autoMs > 0
+      this.fastOn = !!s.fast
+      this.autoLabel = '自动播放：' + (s.autoMs > 0 ? '开' : '关')
+      this.fastLabel = '快进：' + (s.fast ? '开' : '关')
+      this.buildMenuRows()
+    },
+
+    /** 菜单条目：一张在滚动区里按列排布的普通按钮表（不再用 9 行嵌套定位） */
+    buildMenuRows() {
+      this.menuRows = [
+        { t: '继续阅读', c: 'menu-item menu-main', k: 'close' },
+        { t: '保存进度', c: 'menu-item', k: 'save' },
+        { t: '读取存档', c: 'menu-item', k: 'load' },
+        { t: this.autoLabel, c: 'menu-item', k: 'auto' },
+        { t: this.fastLabel, c: 'menu-item', k: 'fast' },
+        { t: '下一章', c: 'menu-item', k: 'chapter' },
+        { t: '快退', c: 'menu-item', k: 'rewind' },
+        { t: '章节列表', c: 'menu-item', k: 'chapters' },
+        { t: 'CG 鉴赏', c: 'menu-item', k: 'gallery' },
+        { t: '设置', c: 'menu-item', k: 'settings' },
+        { t: '主页', c: 'menu-item', k: 'home' },
+        { t: '退出应用', c: 'menu-item menu-quit', k: 'quit' },
+      ]
+    },
+
+    setKeepScreenOn(on) {
+      try {
+        brightness.setKeepScreenOn({ keepScreenOn: !!on })
+      } catch (e) {
+        this.log('屏幕常亮设置失败: ' + (e && e.message ? e.message : e))
+      }
+    },
+
+    // ---------------------------------------------------------------- 日志
+    log(msg, force) {
+      st.dbg = msg
+      if (force || !st.fullText) this.badge = msg
+      try {
+        console.log('[GalGod] ' + msg)
+      } catch (e) {}
+    },
+
+    fail(where, err) {
+      const msg = where + ' 出错: ' + (err && err.message ? err.message : err)
+      this.badge = msg
+      try {
+        console.error('[GalGod] ' + msg)
+      } catch (e) {}
+    },
+
+    // ---------------------------------------------------------------- 节点调度
+    inChunk(index) {
+      return (
+        !!st.chunkNodes &&
+        st.chunkStart >= 0 &&
+        index >= st.chunkStart &&
+        index < st.chunkStart + st.chunkNodes.length
+      )
+    },
+
+    goto(index) {
+      try {
+        if (!st.story) {
+          this.badge = '剧本未载入'
+          return
+        }
+        if (!(index >= 0) || index >= st.story.nodeCount) {
+          this.badge = '节点越界 ' + index
+          this.finishAll()
+          return
+        }
+        st.state.pc = index
+        if (this.inChunk(index)) {
+          this.step()
+          return
+        }
+        const chunk = chunkOf(index, st.story.chunks)
+        if (!chunk) {
+          this.badge = '找不到节点 ' + index + ' 所属分块'
+          return
+        }
+        this.log('读取分块 ' + chunk.file + ' …')
+        st.loader.readChunk(chunk, (nodes) => {
+          if (!nodes) {
+            this.fail('读分块', chunk.file)
+            return
+          }
+          st.chunkNodes = nodes
+          st.chunkStart = chunk.start
+          this.step()
+        })
+      } catch (e) {
+        this.fail('goto(' + index + ')', e)
+      }
+    },
+
+    step() {
+      try {
+        if (!st.story) return
+        let guard = 0
+        while (guard++ < 3000) {
+          const state = st.state
+          if (state.pc >= st.story.nodeCount) {
+            this.finishAll()
+            return
+          }
+          if (!this.inChunk(state.pc)) {
+            st.loader.prefetch(state.pc, st.story.chunks)
+            this.goto(state.pc)
+            return
+          }
+          const node = st.chunkNodes[state.pc - st.chunkStart]
+          if (!node) {
+            this.badge = '节点为空 ' + state.pc
+            return
+          }
+          const res = executeNode(state, node, st.story)
+          if (node.cg !== undefined && node.cg >= 0) this.markSeen(node.cg)
+          if (res.action === 'say') {
+            this.updateHud()
+            st.loader.prefetch(state.pc, st.story.chunks)
+            st.loader.trim(state.pc, st.story.chunks)
+            this.syncVisuals()
+            this.playSay(node)
+            return
+          }
+          if (res.action === 'choice') {
+            this.updateHud()
+            st.loader.prefetch(state.pc, st.story.chunks)
+            st.loader.trim(state.pc, st.story.chunks)
+            this.syncVisuals()
+            this.playChoice(res.choices)
+            return
+          }
+          if (res.action === 'end') {
+            this.updateHud()
+            this.syncVisuals()
+            this.playEnd(node)
+            return
+          }
+        }
+        this.badge = '节点执行超过上限，疑似死循环'
+      } catch (e) {
+        this.fail('step@' + (st.state && st.state.pc), e)
+      }
+    },
+
+    syncVisuals() {
+      const state = st.state
+      if (this.bgSrc !== state.bgSrc) this.bgSrc = state.bgSrc || ''
+      if (this.showBlack !== state.showBlack) this.showBlack = state.showBlack
+      if (this.showWhite !== state.showWhite) this.showWhite = state.showWhite
+      if (this.cgSrc !== state.cgSrc) this.cgSrc = state.cgSrc || ''
+      if (this.tint !== (state.tint || '')) this.tint = state.tint || ''
+      this.panelClass = state.cgSrc ? 'panel-cg' : ''
+      const sp = renderSprites(state.cs)
+      if (this.spL !== sp.left) this.spL = sp.left
+      if (this.spC !== sp.center) this.spC = sp.center
+      if (this.spR !== sp.right) this.spR = sp.right
+    },
+
+    updateHud() {
       if (!st.story) return
-      let guard = 0
-      while (guard++ < 3000) {
-        const state = st.state
-        if (state.pc >= st.story.nodeCount) { this.finishAll(); return }
-        if (!this.inChunk(state.pc)) {
-          st.loader.prefetch(state.pc, st.story.chunks)
-          this.goto(state.pc)
-          return
-        }
-        const node = st.chunkNodes[state.pc - st.chunkStart]
-        if (!node) { this.badge = '节点为空 ' + state.pc; return }
-        const res = executeNode(state, node, st.story)
-        if (node.cg !== undefined && node.cg >= 0) this.markSeen(node.cg)
-        if (res.action === 'say') {
-          this.updateHud()
-          st.loader.prefetch(state.pc, st.story.chunks)
-          st.loader.trim(state.pc, st.story.chunks)
-          this.syncVisuals()
-          this.playSay(node)
-          return
-        }
-        if (res.action === 'choice') {
-          this.updateHud()
-          st.loader.prefetch(state.pc, st.story.chunks)
-          st.loader.trim(state.pc, st.story.chunks)
-          this.syncVisuals()
-          this.playChoice(res.choices)
-          return
-        }
-        if (res.action === 'end') {
-          this.updateHud()
-          this.syncVisuals()
-          this.playEnd(node)
-          return
-        }
+      const p = chapterProgress(st.story, st.state.pc)
+      this.chapterTitle = p.title
+      this.progress = p.percent + '%'
+    },
+
+    // ---------------------------------------------------------------- 台词 / 打字机
+    playSay(node) {
+      this.clearWatchdog()
+      this.badge = ''
+      this.choices = []
+      this.endText = ''
+      this.speaker = node.n || ''
+      st.rawText = node.x || ''
+      // 只在本次进入阅读后渲染出第一句时打一条日志：真机排障时能立刻确认
+      // 「剧本已读到 + 字幕已渲染」，之后不再逐句打印（性能规范要求精简日志）
+      if (!st.firstSayLogged) {
+        st.firstSayLogged = true
+        this.log(
+          '首句渲染 pc=' +
+            st.state.pc +
+            ' 说话人=' +
+            (this.speaker || '（旁白）')
+        )
       }
-      this.badge = '节点执行超过上限，疑似死循环'
-    } catch (e) {
-      this.fail('step@' + (st.state && st.state.pc), e)
-    }
-  },
-
-  syncVisuals() {
-    const state = st.state
-    if (this.bgSrc !== state.bgSrc) this.bgSrc = state.bgSrc || ''
-    if (this.showBlack !== state.showBlack) this.showBlack = state.showBlack
-    if (this.showWhite !== state.showWhite) this.showWhite = state.showWhite
-    if (this.cgSrc !== state.cgSrc) this.cgSrc = state.cgSrc || ''
-    if (this.tint !== (state.tint || '')) this.tint = state.tint || ''
-    this.panelClass = state.cgSrc ? 'panel-cg' : ''
-    const sp = renderSprites(state.cs)
-    if (this.spL !== sp.left) this.spL = sp.left
-    if (this.spC !== sp.center) this.spC = sp.center
-    if (this.spR !== sp.right) this.spR = sp.right
-  },
-
-  updateHud() {
-    if (!st.story) return
-    const p = chapterProgress(st.story, st.state.pc)
-    this.chapterTitle = p.title
-    this.progress = p.percent + '%'
-  },
-
-  // ---------------------------------------------------------------- 排版
-  metrics() {
-    return paginationMetrics(st.settings.size, st.shape)
-  },
-
-  paginate(text) {
-    const m = this.metrics()
-    return paginateText(text, m.charsPerLine, m.linesPerPage)
-  },
-
-  reflow() {
-    if (!st.rawText) return
-    st.pages = this.paginate(st.rawText)
-    st.pageIdx = 0
-    this.showPageText(st.pages[0] || [''])
-    st.typingToken += 1
-    st.canTap = true
-    this.canTap = true
-  },
-
-  showPageText(lines) {
-    st.fullText = (lines || ['']).join('\n')
-    st.typing = st.fullText.length
-    this.pageText = st.fullText
-  },
-
-  // ---------------------------------------------------------------- 台词 / 打字机
-  playSay(node) {
-    this.clearWatchdog()
-    this.badge = ''
-    this.choices = []
-    this.endText = ''
-    this.speaker = node.n || ''
-    st.rawText = node.x || ''
-    // 只在本次进入阅读后渲染出第一句时打一条日志：真机排障时能立刻确认
-    // 「剧本已读到 + 字幕已渲染」，之后不再逐句打印（性能规范要求精简日志）
-    if (!st.firstSayLogged) {
-      st.firstSayLogged = true
-      this.log('首句渲染 pc=' + st.state.pc + ' 说话人=' + (this.speaker || '（旁白）'))
-    }
-    try {
-      if (!st.hist) st.hist = []
-      const top = st.hist[st.hist.length - 1]
-      if (!top || top.pc !== st.state.pc) {
-        st.hist.push(collectSave(st.state, st.story, ''))
-        if (st.hist.length > 60) st.hist.shift()
-      }
-    } catch (e) {}
-    st.pages = this.paginate(st.rawText)
-    st.pageIdx = 0
-    this.playPage()
-  },
-
-  playPage() {
-    this.clearAuto()
-    const lines = st.pages[st.pageIdx] || ['']
-    st.fullText = lines.join('\n')
-    st.typing = 0
-    st.canTap = false
-    this.canTap = false
-    this.pageText = ''
-    const speed = st.settings.fast ? 0 : st.settings.speed
-    if (!speed) { this.finishTyping(); return }
-    st.typingToken += 1
-    st.typingAt = Date.now()
-    const token = st.typingToken
-    armTimer(st, 'timer', () => this.tickTyping(token), TYPE_TICK_MS)
-  },
-
-  tickTyping(token) {
-    if (token !== st.typingToken) return
-    const speed = st.settings.fast ? 0 : st.settings.speed
-    if (!speed) { this.finishTyping(); return }
-    const full = st.fullText
-    const elapsed = Math.max(0, Date.now() - st.typingAt)
-    const n = Math.max(st.typing + 1, Math.floor(elapsed / speed) + 1)
-    if (n >= full.length) {
-      st.typing = full.length
-      this.pageText = full
-      this.finishTyping()
-      return
-    }
-    st.typing = n
-    this.pageText = full.slice(0, n)
-    armTimer(st, 'timer', () => this.tickTyping(token), TYPE_TICK_MS)
-  },
-
-  finishTyping() {
-    st.typingToken += 1
-    disarmTimer(st, 'timer')
-    st.typing = st.fullText.length
-    this.pageText = st.fullText
-    st.canTap = true
-    this.canTap = true
-    this.scheduleAuto()
-  },
-
-  scheduleAuto() {
-    this.clearAuto()
-    if (this.choices.length || this.endText) return
-    if (st.settings.fast) {
-      armTimer(st, 'autoTimer', () => this.advance(), 220)
-      return
-    }
-    if (!st.settings.autoMs) return
-    const wait = autoDelay(st.fullText, st.settings.autoMs)
-    armTimer(st, 'autoTimer', () => this.advance(), wait)
-  },
-
-  clearAuto() {
-    disarmTimer(st, 'autoTimer')
-  },
-
-  clearWatchdog() {
-    disarmTimer(st, 'watchdog')
-  },
-
-  clearAllTimers() {
-    disarmTimer(st, 'timer')
-    disarmTimer(st, 'autoTimer')
-    disarmTimer(st, 'saveTimer')
-    disarmTimer(st, 'seenTimer')
-    disarmTimer(st, 'holdTimer')
-    disarmTimer(st, 'holdMax')
-    disarmTimer(st, 'watchdog')
-    disarmInterval(st, 'rewindTimer')
-    st.typingToken += 1
-  },
-
-  // ---------------------------------------------------------------- CG 解锁
-  markSeen(index) {
-    if (!st.seenIdx) { st.seenIdx = {}; st.seenList = [] }
-    if (st.seenIdx[index]) return
-    st.seenIdx[index] = 1
-    st.seenList.push(index)
-    disarmTimer(st, 'seenTimer')
-    armTimer(st, 'seenTimer', () => { this.flushSeen() }, 500)
-  },
-
-  flushSeen() {
-    disarmTimer(st, 'seenTimer')
-    if (st.seenList && st.seenList.length) saveSeen(st.seenList)
-  },
-
-  // ---------------------------------------------------------------- 交互
-  lock() { st.lockTap = Date.now() },
-
-  onTap() {
-    // 兜底收尾：某些固件只派发 click、不派发 touchend，这里保证「按住快进」一定会停。
-    // 注意：这个收尾必须在下面的 400ms 点击锁之前执行，否则迟到的 click 收不了尾。
-    try { this.endHold() } catch (e) {}
-    if (st.lockTap && Date.now() - st.lockTap < 400) return
-    if (st.rewindTimer) {
-      this.stopRewindRepeat()
-      this.lock()
-      prompt.showToast({ message: '已停止快退' })
-      return
-    }
-    this.advance()
-  },
-
-  advance() {
-    if (this.endText) { router.replace({ uri: '/pages/Home' }); return }
-    if (this.menu || this.choices.length) return
-    this.clearAuto()
-    if (!st.canTap) { this.finishTyping(); return }
-    if (st.pageIdx < st.pages.length - 1) {
-      st.pageIdx += 1
+      try {
+        if (!st.hist) st.hist = []
+        const top = st.hist[st.hist.length - 1]
+        if (!top || top.pc !== st.state.pc) {
+          st.hist.push(collectSave(st.state, st.story, ''))
+          if (st.hist.length > 60) st.hist.shift()
+        }
+      } catch (e) {}
+      st.pages = this.paginate(st.rawText)
+      st.pageIdx = 0
       this.playPage()
-      return
-    }
-    st.state.pc += 1
-    this.bumpAutoSave()
-    this.step()
-  },
+    },
 
-  onLongPress() {
-    if (this.menu || this.endText) return
-    const mode = longpressMode(st.settings)
-    if (mode === 'off' || mode === 'fast') return
-    this.lock()
-    this.uiHidden = !this.uiHidden
-    this.clearAuto()
-  },
-
-  onTouchStart(e) {
-    st.swipeY0 = readY(e)
-    st.swipeX0 = readX(e)
-    st.swipeT0 = Date.now()
-    if (this.menu || this.endText || this.choices.length) return
-    if (longpressMode(st.settings) !== 'fast') return
-    disarmTimer(st, 'holdTimer')
-    armTimer(st, 'holdTimer', () => {
-      st.holdFast = true
-      this.lock()
-      this.setFast(true)
-      armTimer(st, 'holdMax', () => {
-        if (st.holdFast) this.endHold()
-      }, HOLD_MAX_MS)
-    }, HOLD_MS)
-  },
-
-  onTouchEnd(e) {
-    // 先判滑动（下滑开菜单 / 右滑快退），再收尾「按住快进」
-    this.checkSwipe(e)
-    this.endHold()
-  },
-
-  /**
-   * 结束「按住快进」并清掉长按相关定时器。
-   *
-   * 说明：这里是 Vela 版 onHoldEnd 的 BlueOS 重写。Vela 的 onlongpress 只触发一次、
-   * 没有松手事件，所以源工程用「按下自己计时 + touchend 收尾」实现按住快进；
-   * 本页面把「松手收尾」统一收敛到本方法，由 onTouchEnd 与 onTap（click 兜底）调用。
-   * 早期草稿里 onTap 还留着 `this.onHoldEnd()` 的调用，而方法已改名 → 真机点击会抛
-   * "not a function"，字幕卡住不动；现在由 tools/check-methods.mjs 静态拦截这类错误。
-   */
-  endHold() {
-    disarmTimer(st, 'holdTimer')
-    disarmTimer(st, 'holdMax')
-    if (!st.holdFast) return
-    st.holdFast = false
-    this.setFast(false)
-  },
-
-  checkSwipe(e) {
-    const y0 = st.swipeY0
-    const x0 = st.swipeX0
-    const t0 = st.swipeT0
-    st.swipeY0 = null
-    st.swipeX0 = null
-    st.swipeT0 = 0
-    if (!t0) return
-    if (Date.now() - t0 > SWIPE_MS) return
-    if (this.menu || this.endText) return
-    const y1 = readY(e)
-    const x1 = readX(e)
-    const dy = (y1 === null || y0 === null) ? 0 : (y1 - y0)
-    const dx = (x1 === null || x0 === null) ? 0 : (x1 - x0)
-    if (dy >= SWIPE_MIN && dy >= Math.abs(dx)) {
-      st.lockTap = Date.now()
-      this.openMenu()
-      return
-    }
-    if (dx >= SWIPE_MIN && dx > Math.abs(dy)) {
-      st.lockTap = Date.now()
-      this.rewindOnce()
-    }
-  },
-
-  setFast(on) {
-    const s = Object.assign({}, st.settings)
-    s.fast = !!on
-    if (on) s.autoMs = 0
-    st.settings = s
-    this.fastOn = !!s.fast
-    this.autoOn = s.autoMs > 0
-    this.autoLabel = '自动播放：' + (s.autoMs > 0 ? '开' : '关')
-    this.fastLabel = '快进：' + (s.fast ? '开' : '关')
-    if (on) this.scheduleAuto()
-    else this.clearAuto()
-  },
-
-  // ---------------------------------------------------------------- 菜单
-  openMenu() { this.lock(); this.menu = true; this.clearAuto() },
-  closeMenu() { this.lock(); this.menu = false; this.scheduleAuto() },
-  onBlockTap() {},
-
-  toggleAuto() {
-    this.lock()
-    const s = Object.assign({}, st.settings)
-    s.autoMs = s.autoMs > 0 ? 0 : AUTO_DEFAULT
-    if (s.autoMs > 0) s.fast = false
-    st.settings = s
-    saveSettings(s)
-    this.applyAutoLabels()
-    this.menu = false
-    this.scheduleAuto()
-  },
-
-  toggleFast() {
-    this.lock()
-    const s = Object.assign({}, st.settings)
-    s.fast = !s.fast
-    if (s.fast) s.autoMs = 0
-    st.settings = s
-    saveSettings(s)
-    this.applyAutoLabels()
-    this.menu = false
-    this.scheduleAuto()
-  },
-
-  nextChapter() {
-    this.lock()
-    this.menu = false
-    if (!st.story) return
-    const nx = nextVisibleChapter(st.story, st.cleared, st.state.pc)
-    if (!nx) {
-      prompt.showToast({ message: '已经是最后一章' })
-      this.scheduleAuto()
-      return
-    }
-    this.goto(nx.start)
-  },
-
-  // ---- 快退：按一下菜单里的「快退」→ 关闭菜单并连续回退，点屏幕停止
-  rewind() {
-    this.lock()
-    this.menu = false
-    this.clearAuto()
-    this.stopRewindRepeat()
-    if (!this.rewindStep()) {
-      prompt.showToast({ message: '已经是最早的一句了' })
-      return
-    }
-    armInterval(st, 'rewindTimer', () => {
-      if (!this.rewindStep()) {
-        this.stopRewindRepeat()
-        prompt.showToast({ message: '已经退到最早的一句了' })
+    playPage() {
+      this.clearAuto()
+      const lines = st.pages[st.pageIdx] || ['']
+      st.fullText = lines.join('\n')
+      st.typing = 0
+      st.canTap = false
+      this.canTap = false
+      this.pageText = ''
+      const speed = st.settings.fast ? 0 : st.settings.speed
+      if (!speed) {
+        this.finishTyping()
+        return
       }
-    }, 180)
-  },
+      st.typingToken += 1
+      st.typingAt = Date.now()
+      const token = st.typingToken
+      armTimer(st, 'timer', () => this.tickTyping(token), TYPE_TICK_MS)
+    },
 
-  rewindStep() {
-    const h = st.hist || []
-    if (h.length < 2) return false
-    h.pop()
-    const prev = h.pop()
-    h.push(prev)
-    this.applySaveData(prev)
-    return true
-  },
+    tickTyping(token) {
+      if (token !== st.typingToken) return
+      const speed = st.settings.fast ? 0 : st.settings.speed
+      if (!speed) {
+        this.finishTyping()
+        return
+      }
+      const full = st.fullText
+      const elapsed = Math.max(0, Date.now() - st.typingAt)
+      const n = Math.max(st.typing + 1, Math.floor(elapsed / speed) + 1)
+      if (n >= full.length) {
+        st.typing = full.length
+        this.pageText = full
+        this.finishTyping()
+        return
+      }
+      st.typing = n
+      this.pageText = full.slice(0, n)
+      armTimer(st, 'timer', () => this.tickTyping(token), TYPE_TICK_MS)
+    },
 
-  rewindOnce() {
-    this.lock()
-    if (st.rewindTimer) this.stopRewindRepeat()
-    if (!this.rewindStep()) prompt.showToast({ message: '已经是最早的一句了' })
-  },
+    finishTyping() {
+      st.typingToken += 1
+      disarmTimer(st, 'timer')
+      st.typing = st.fullText.length
+      this.pageText = st.fullText
+      st.canTap = true
+      this.canTap = true
+      this.scheduleAuto()
+    },
 
-  stopRewindRepeat() {
-    disarmInterval(st, 'rewindTimer')
-  },
+    scheduleAuto() {
+      this.clearAuto()
+      if (this.choices.length || this.endText) return
+      if (st.settings.fast) {
+        armTimer(st, 'autoTimer', () => this.advance(), 220)
+        return
+      }
+      if (!st.settings.autoMs) return
+      const wait = autoDelay(st.fullText, st.settings.autoMs)
+      armTimer(st, 'autoTimer', () => this.advance(), wait)
+    },
 
-  // ---------------------------------------------------------------- 存档 / 导航
-  bumpAutoSave() {
-    st.advanceCount += 1
-    if (st.advanceCount < 8) return
-    st.advanceCount = 0
-    disarmTimer(st, 'saveTimer')
-    armTimer(st, 'saveTimer', () => { this.flushAutoSave() }, 400)
-  },
+    clearAuto() {
+      disarmTimer(st, 'autoTimer')
+    },
 
-  flushAutoSave() {
-    disarmTimer(st, 'saveTimer')
-    if (!st.story) return
-    st.advanceCount = 0
-    saveAutoSave(collectSave(st.state, st.story, this.pageText))
-  },
+    clearWatchdog() {
+      disarmTimer(st, 'watchdog')
+    },
 
-  goSave() {
-    this.lock()
-    this.menu = false
-    const data = collectSave(st.state, st.story, this.pageText)
-    writeJSON('pendingSave', data, (ok) => {
-      if (!ok) { this.badge = '无法准备存档'; return }
-      router.push({ uri: '/pages/Saves', params: { mode: 'save' } })
-    })
-  },
+    clearAllTimers() {
+      disarmTimer(st, 'timer')
+      disarmTimer(st, 'autoTimer')
+      disarmTimer(st, 'saveTimer')
+      disarmTimer(st, 'seenTimer')
+      disarmTimer(st, 'holdTimer')
+      disarmTimer(st, 'holdMax')
+      disarmTimer(st, 'watchdog')
+      disarmInterval(st, 'rewindTimer')
+      st.typingToken += 1
+    },
 
-  goLoad() {
-    this.lock()
-    this.menu = false
-    this.flushSeen()
-    router.push({ uri: '/pages/Saves', params: { mode: 'load' } })
-  },
+    // ---------------------------------------------------------------- CG 解锁
+    markSeen(index) {
+      if (!st.seenIdx) {
+        st.seenIdx = {}
+        st.seenList = []
+      }
+      if (st.seenIdx[index]) return
+      st.seenIdx[index] = 1
+      st.seenList.push(index)
+      disarmTimer(st, 'seenTimer')
+      armTimer(
+        st,
+        'seenTimer',
+        () => {
+          this.flushSeen()
+        },
+        500
+      )
+    },
 
-  goChapters() {
-    this.lock()
-    this.menu = false
-    this.flushSeen()
-    router.push({ uri: '/pages/Chapters' })
-  },
+    flushSeen() {
+      disarmTimer(st, 'seenTimer')
+      if (st.seenList && st.seenList.length) saveSeen(st.seenList)
+    },
 
-  goGallery() {
-    this.lock()
-    this.menu = false
-    this.flushSeen()
-    router.push({ uri: '/pages/Gallery' })
-  },
+    // ---------------------------------------------------------------- 交互
+    lock() {
+      st.lockTap = Date.now()
+    },
 
-  goSettings() {
-    this.lock()
-    this.menu = false
-    router.push({ uri: '/pages/Settings' })
-  },
+    onTap() {
+      // 兜底收尾：某些固件只派发 click、不派发 touchend，这里保证「按住快进」一定会停。
+      // 注意：这个收尾必须在下面的 400ms 点击锁之前执行，否则迟到的 click 收不了尾。
+      try {
+        this.endHold()
+      } catch (e) {}
+      if (st.lockTap && Date.now() - st.lockTap < 400) return
+      if (st.rewindTimer) {
+        this.stopRewindRepeat()
+        this.lock()
+        prompt.showToast({ message: '已停止快退' })
+        return
+      }
+      this.advance()
+    },
 
-  goHome() {
-    this.lock()
-    this.menu = false
-    this.flushAutoSave()
-    this.flushSeen()
-    router.replace({ uri: '/pages/Home' })
-  },
+    advance() {
+      if (this.endText) {
+        router.replace({ uri: '/pages/Home' })
+        return
+      }
+      if (this.menu || this.choices.length) return
+      this.clearAuto()
+      if (!st.canTap) {
+        this.finishTyping()
+        return
+      }
+      if (st.pageIdx < st.pages.length - 1) {
+        st.pageIdx += 1
+        this.playPage()
+        return
+      }
+      st.state.pc += 1
+      this.bumpAutoSave()
+      this.step()
+    },
 
-  quitApp() {
-    this.lock()
-    this.flushAutoSave()
-    this.flushSeen()
-    this.$app.exit()
-  },
+    onLongPress() {
+      if (this.menu || this.endText) return
+      const mode = longpressMode(st.settings)
+      if (mode === 'off' || mode === 'fast') return
+      this.lock()
+      this.uiHidden = !this.uiHidden
+      this.clearAuto()
+    },
 
-  // ---------------------------------------------------------------- 选项 / 结局
-  playChoice(choices) {
-    this.clearAuto()
-    this.clearWatchdog()
-    this.badge = ''
-    this.pageText = ''
-    this.speaker = ''
-    st.rawText = ''
-    st.canTap = false
-    this.canTap = false
-    this.choices = choices || []
-  },
+    onTouchStart(e) {
+      st.swipeY0 = readY(e)
+      st.swipeX0 = readX(e)
+      st.swipeT0 = Date.now()
+      if (this.menu || this.endText || this.choices.length) return
+      if (longpressMode(st.settings) !== 'fast') return
+      disarmTimer(st, 'holdTimer')
+      armTimer(
+        st,
+        'holdTimer',
+        () => {
+          st.holdFast = true
+          this.lock()
+          this.setFast(true)
+          armTimer(
+            st,
+            'holdMax',
+            () => {
+              if (st.holdFast) this.endHold()
+            },
+            HOLD_MAX_MS
+          )
+        },
+        HOLD_MS
+      )
+    },
 
-  pickChoice(idx) {
-    this.lock()
-    const c = this.choices[idx]
-    if (!c) return
-    this.choices = []
-    st.state.pc = c.j
-    this.bumpAutoSave()
-    this.step()
-  },
+    onTouchEnd(e) {
+      // 先判滑动（上/下滑开菜单、右滑快退），再收尾「按住快进」
+      this.checkSwipe(e)
+      this.endHold()
+    },
 
-  playEnd(node) {
-    this.clearAllTimers()
-    this.badge = ''
-    this.choices = []
-    this.endText = node && node.x ? node.x : '剧终'
-    if (st.state.flags && st.state.flags.true_end_finish === 1) {
-      st.cleared = true
-      markCleared()
-    }
-    saveAutoSave(collectSave(st.state, st.story, ''))
-  },
+    /**
+     * 结束「按住快进」并清掉长按相关定时器。
+     *
+     * 说明：这里是 Vela 版 onHoldEnd 的 BlueOS 重写。Vela 的 onlongpress 只触发一次、
+     * 没有松手事件，所以源工程用「按下自己计时 + touchend 收尾」实现按住快进；
+     * 本页面把「松手收尾」统一收敛到本方法，由 onTouchEnd 与 onTap（click 兜底）调用。
+     * 早期草稿里 onTap 还留着 `this.onHoldEnd()` 的调用，而方法已改名 → 真机点击会抛
+     * "not a function"，字幕卡住不动；现在由 tools/check-methods.mjs 静态拦截这类错误。
+     */
+    endHold() {
+      disarmTimer(st, 'holdTimer')
+      disarmTimer(st, 'holdMax')
+      if (!st.holdFast) return
+      st.holdFast = false
+      this.setFast(false)
+    },
 
-  finishAll() {
-    this.playEnd({ x: '—— 全剧终 ——' })
-  },
+    checkSwipe(e) {
+      const y0 = st.swipeY0
+      const x0 = st.swipeX0
+      const t0 = st.swipeT0
+      st.swipeY0 = null
+      st.swipeX0 = null
+      st.swipeT0 = 0
+      if (!t0) return
+      if (Date.now() - t0 > SWIPE_MS) return
+      if (this.menu || this.endText) return
+      const y1 = readY(e)
+      const x1 = readX(e)
+      // 触摸坐标是物理 px，SWIPE_MIN 是设计 px（方屏 432/466≈0.93，不换算会偏迟钝）
+      const scale = st.coordScale > 0 ? st.coordScale : 1
+      const dy = y1 === null || y0 === null ? 0 : (y1 - y0) * scale
+      const dx = x1 === null || x0 === null ? 0 : (x1 - x0) * scale
+      if (Math.abs(dy) >= SWIPE_MIN && Math.abs(dy) >= Math.abs(dx)) {
+        // 下滑 / 上滑都开菜单（原来的顶部「≡」按钮已按真机反馈移除）
+        st.lockTap = Date.now()
+        this.openMenu()
+        return
+      }
+      if (dx >= SWIPE_MIN && dx > Math.abs(dy)) {
+        st.lockTap = Date.now()
+        this.rewindOnce()
+      }
+    },
 
-  onEndingTap() {
-    router.replace({ uri: '/pages/Home' })
-  },
-}
+    setFast(on) {
+      const s = Object.assign({}, st.settings)
+      s.fast = !!on
+      if (on) s.autoMs = 0
+      st.settings = s
+      this.fastOn = !!s.fast
+      this.autoOn = s.autoMs > 0
+      this.autoLabel = '自动播放：' + (s.autoMs > 0 ? '开' : '关')
+      this.fastLabel = '快进：' + (s.fast ? '开' : '关')
+      this.buildMenuRows()
+      if (on) this.scheduleAuto()
+      else this.clearAuto()
+    },
+
+    // ---------------------------------------------------------------- 菜单
+    openMenu() {
+      this.lock()
+      this.menu = true
+      this.clearAuto()
+    },
+    closeMenu() {
+      this.lock()
+      this.menu = false
+      this.scheduleAuto()
+    },
+    onBlockTap() {},
+
+    /** 菜单条目点按（menuRows 的点击分发） */
+    pickMenu(idx) {
+      const row = this.menuRows[idx]
+      if (!row) return
+      const k = row.k
+      if (k === 'close') {
+        this.closeMenu()
+        return
+      }
+      if (k === 'save') {
+        this.goSave()
+        return
+      }
+      if (k === 'load') {
+        this.goLoad()
+        return
+      }
+      if (k === 'auto') {
+        this.toggleAuto()
+        return
+      }
+      if (k === 'fast') {
+        this.toggleFast()
+        return
+      }
+      if (k === 'chapter') {
+        this.nextChapter()
+        return
+      }
+      if (k === 'rewind') {
+        this.rewind()
+        return
+      }
+      if (k === 'chapters') {
+        this.goChapters()
+        return
+      }
+      if (k === 'gallery') {
+        this.goGallery()
+        return
+      }
+      if (k === 'settings') {
+        this.goSettings()
+        return
+      }
+      if (k === 'home') {
+        this.goHome()
+        return
+      }
+      if (k === 'quit') {
+        this.quitApp()
+        return
+      }
+    },
+
+    toggleAuto() {
+      this.lock()
+      const s = Object.assign({}, st.settings)
+      s.autoMs = s.autoMs > 0 ? 0 : AUTO_DEFAULT
+      if (s.autoMs > 0) s.fast = false
+      st.settings = s
+      saveSettings(s)
+      this.applyAutoLabels()
+      this.menu = false
+      this.scheduleAuto()
+    },
+
+    toggleFast() {
+      this.lock()
+      const s = Object.assign({}, st.settings)
+      s.fast = !s.fast
+      if (s.fast) s.autoMs = 0
+      st.settings = s
+      saveSettings(s)
+      this.applyAutoLabels()
+      this.menu = false
+      this.scheduleAuto()
+    },
+
+    nextChapter() {
+      this.lock()
+      this.menu = false
+      if (!st.story) return
+      const nx = nextVisibleChapter(st.story, st.cleared, st.state.pc)
+      if (!nx) {
+        prompt.showToast({ message: '已经是最后一章' })
+        this.scheduleAuto()
+        return
+      }
+      this.goto(nx.start)
+    },
+
+    // ---- 快退：按一下菜单里的「快退」→ 关闭菜单并连续回退，点屏幕停止
+    rewind() {
+      this.lock()
+      this.menu = false
+      this.clearAuto()
+      this.stopRewindRepeat()
+      if (!this.rewindStep()) {
+        prompt.showToast({ message: '已经是最早的一句了' })
+        return
+      }
+      armInterval(
+        st,
+        'rewindTimer',
+        () => {
+          if (!this.rewindStep()) {
+            this.stopRewindRepeat()
+            prompt.showToast({ message: '已经退到最早的一句了' })
+          }
+        },
+        180
+      )
+    },
+
+    rewindStep() {
+      const h = st.hist || []
+      if (h.length < 2) return false
+      h.pop()
+      const prev = h.pop()
+      h.push(prev)
+      this.applySaveData(prev)
+      return true
+    },
+
+    rewindOnce() {
+      this.lock()
+      if (st.rewindTimer) this.stopRewindRepeat()
+      if (!this.rewindStep())
+        prompt.showToast({ message: '已经是最早的一句了' })
+    },
+
+    stopRewindRepeat() {
+      disarmInterval(st, 'rewindTimer')
+    },
+
+    // ---------------------------------------------------------------- 存档 / 导航
+    bumpAutoSave() {
+      st.advanceCount += 1
+      if (st.advanceCount < 8) return
+      st.advanceCount = 0
+      disarmTimer(st, 'saveTimer')
+      armTimer(
+        st,
+        'saveTimer',
+        () => {
+          this.flushAutoSave()
+        },
+        400
+      )
+    },
+
+    flushAutoSave() {
+      disarmTimer(st, 'saveTimer')
+      if (!st.story) return
+      st.advanceCount = 0
+      saveAutoSave(collectSave(st.state, st.story, this.pageText))
+    },
+
+    goSave() {
+      this.lock()
+      this.menu = false
+      const data = collectSave(st.state, st.story, this.pageText)
+      writeJSON('pendingSave', data, (ok) => {
+        if (!ok) {
+          this.badge = '无法准备存档'
+          return
+        }
+        router.push({ uri: '/pages/Saves', params: { mode: 'save' } })
+      })
+    },
+
+    goLoad() {
+      this.lock()
+      this.menu = false
+      this.flushSeen()
+      router.push({ uri: '/pages/Saves', params: { mode: 'load' } })
+    },
+
+    goChapters() {
+      this.lock()
+      this.menu = false
+      this.flushSeen()
+      router.push({ uri: '/pages/Chapters' })
+    },
+
+    goGallery() {
+      this.lock()
+      this.menu = false
+      this.flushSeen()
+      router.push({ uri: '/pages/Gallery' })
+    },
+
+    goSettings() {
+      this.lock()
+      this.menu = false
+      router.push({ uri: '/pages/Settings' })
+    },
+
+    goHome() {
+      this.lock()
+      this.menu = false
+      this.flushAutoSave()
+      this.flushSeen()
+      router.replace({ uri: '/pages/Home' })
+    },
+
+    quitApp() {
+      this.lock()
+      this.flushAutoSave()
+      this.flushSeen()
+      this.$app.exit()
+    },
+
+    // ---------------------------------------------------------------- 选项 / 结局
+    playChoice(choices) {
+      this.clearAuto()
+      this.clearWatchdog()
+      this.badge = ''
+      this.pageText = ''
+      this.speaker = ''
+      st.rawText = ''
+      st.canTap = false
+      this.canTap = false
+      this.choices = choices || []
+    },
+
+    pickChoice(idx) {
+      this.lock()
+      const c = this.choices[idx]
+      if (!c) return
+      this.choices = []
+      st.state.pc = c.j
+      this.bumpAutoSave()
+      this.step()
+    },
+
+    playEnd(node) {
+      this.clearAllTimers()
+      this.badge = ''
+      this.choices = []
+      this.endText = node && node.x ? node.x : '剧终'
+      if (st.state.flags && st.state.flags.true_end_finish === 1) {
+        st.cleared = true
+        markCleared()
+      }
+      saveAutoSave(collectSave(st.state, st.story, ''))
+    },
+
+    finishAll() {
+      this.playEnd({ x: '—— 全剧终 ——' })
+    },
+
+    onEndingTap() {
+      router.replace({ uri: '/pages/Home' })
+    },
+  }
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" id="game-root">
     <image class="bg" src="{{ bgSrc }}" if="{{ bgSrc }}"></image>
     <div class="solid-black" if="{{ showBlack }}"></div>
     <div class="solid-white" if="{{ showWhite }}"></div>
@@ -957,30 +1244,56 @@ export default {
     <image class="cg" src="{{ cgSrc }}" if="{{ cgSrc }}"></image>
     <div class="tint" if="{{ tint }}"></div>
 
-    <div class="panel {{ panelClass }} {{ layoutClass }}" if="{{ !uiHidden && !endText && !choices.length }}"></div>
-    <text class="speaker {{ layoutClass }}" if="{{ !uiHidden && !endText && !choices.length && speaker }}">{{ speaker }}</text>
-    <text class="line {{ layoutClass }}" style="{{ lineStyle }}" if="{{ !uiHidden && !endText && !choices.length }}">{{ pageText }}</text>
-    <text class="next-hint {{ layoutClass }}" if="{{ !uiHidden && !endText && !choices.length && canTap }}">▼</text>
+    <!-- 对白层：面板只做背景，说话人/正文/继续提示都是它的兄弟节点（扁平化） -->
+    <div
+      class="panel {{ panelClass }} {{ layoutClass }}"
+      style="{{ panelStyle }}"
+      if="{{ !uiHidden && !endText && !choices.length }}"></div>
+    <text
+      class="speaker {{ layoutClass }}"
+      style="{{ nameStyle }}"
+      if="{{ !uiHidden && !endText && !choices.length && speaker }}">
+      {{ speaker }}
+    </text>
+    <text
+      class="line {{ layoutClass }}"
+      style="{{ lineStyle }}"
+      if="{{ !uiHidden && !endText && !choices.length }}">
+      {{ pageText }}
+    </text>
+    <text
+      class="next-hint {{ layoutClass }}"
+      if="{{ !uiHidden && !endText && !choices.length && canTap }}">
+      ▼
+    </text>
 
-    <text class="hud {{ layoutClass }}" if="{{ !uiHidden && !endText }}">{{ chapterTitle }} · {{ progress }}</text>
+    <!-- 顶部信息条：贴近最上方（圆屏受安全圆限制到 top 44） -->
+    <text class="hud {{ layoutClass }}" if="{{ !uiHidden && !endText }}">
+      {{ chapterTitle }} · {{ progress }}
+    </text>
     <text class="badge {{ layoutClass }}" if="{{ badge }}">{{ badge }}</text>
 
     <!-- 阅读点击层：放在视觉层之上、菜单/选项层之下 -->
-    <div class="tap-layer" @click="onTap" @longpress="onLongPress"
-         @touchstart="onTouchStart" @touchend="onTouchEnd" @touchcancel="onTouchEnd"></div>
+    <div
+      class="tap-layer"
+      @click="onTap"
+      @longpress="onLongPress"
+      @touchstart="onTouchStart"
+      @touchend="onTouchEnd"
+      @touchcancel="onTouchEnd"></div>
 
-    <!-- 顶部右侧「≡」阅读菜单按钮。
-         DOM 顺序必须在点击层之后才能收到点击（BlueOS 不支持 z-index，靠绘制顺序）；
-         openMenu() 会打 400ms 点击锁，所以即使事件冒泡到点击层也不会顺带翻页。 -->
-    <div class="menu-fab {{ layoutClass }}" if="{{ !uiHidden && !endText && !choices.length && !menu }}" @click="openMenu">
-      <text class="menu-fab-ico {{ layoutClass }}">≡</text>
-    </div>
-
-    <!-- 选项（最多 5 个，超过一屏时用 scroll 滚动） -->
-    <div class="choice-layer" if="{{ choices.length }}" @click="onBlockTap">
+    <!-- 选项：全屏遮罩 + 滚动列表（都是 .page 的直接子节点，避免嵌套定位容器） -->
+    <div
+      class="choice-scrim"
+      if="{{ choices.length }}"
+      @click="onBlockTap"></div>
+    <div class="choice-wrap" if="{{ choices.length }}">
       <scroll class="choice-scroll" scroll-y="true" bounces="true">
         <div class="choice-box">
-          <div class="choice-item" for="{{ choices }}" @click="pickChoice($idx)">
+          <div
+            class="choice-item"
+            for="{{ choices }}"
+            @click="pickChoice($idx)">
             <text class="choice-text">{{ $item.x }}</text>
           </div>
         </div>
@@ -993,28 +1306,30 @@ export default {
       <text class="end-tip">轻触返回标题</text>
     </div>
 
-    <!-- 阅读菜单 -->
-    <div class="menu-layer" if="{{ menu }}" @click="onBlockTap">
-      <text class="menu-title">阅读菜单</text>
-      <text class="menu-sub">{{ chapterTitle }} · {{ progress }}</text>
-      <div class="menu-btn menu-main menu-y0" @click="closeMenu"><text class="menu-t">继续阅读</text></div>
-      <div class="menu-btn menu-y1" @click="goSave"><text class="menu-t">保存进度</text></div>
-      <div class="menu-btn menu-y2" @click="goLoad"><text class="menu-t">读取存档</text></div>
-      <div class="menu-btn menu-y3" @click="toggleAuto"><text class="menu-t">{{ autoLabel }}</text></div>
-      <div class="menu-btn menu-y4" @click="toggleFast"><text class="menu-t">{{ fastLabel }}</text></div>
-      <div class="menu-row menu-y5">
-        <div class="menu-btn menu-half menu-first" @click="nextChapter"><text class="menu-t">下一章</text></div>
-        <div class="menu-btn menu-half menu-second" @click="rewind"><text class="menu-t">快退</text></div>
-      </div>
-      <div class="menu-row menu-y6">
-        <div class="menu-btn menu-half menu-first" @click="goChapters"><text class="menu-t">章节</text></div>
-        <div class="menu-btn menu-half menu-second" @click="goGallery"><text class="menu-t">CG</text></div>
-      </div>
-      <div class="menu-row menu-y7">
-        <div class="menu-btn menu-half menu-first" @click="goSettings"><text class="menu-t">设置</text></div>
-        <div class="menu-btn menu-half menu-second" @click="goHome"><text class="menu-t">主页</text></div>
-      </div>
-      <div class="menu-btn menu-quit menu-y8" @click="quitApp"><text class="menu-t">退出</text></div>
+    <!-- 阅读菜单：scrim + 标题 + 滚动列表。
+         手势入口：屏幕上下滑 / 返回手势（顶部「≡」按钮已按真机反馈移除）。
+         按钮是滚动列里的流式节点，不再逐个绝对定位——实机上嵌套定位容器会把宽度
+         二次换算，12 个按钮会挤成一团。 -->
+    <div class="menu-scrim" if="{{ menu }}" @click="onBlockTap"></div>
+    <text class="menu-title {{ layoutClass }}" if="{{ menu }}">阅读菜单</text>
+    <text class="menu-sub {{ layoutClass }}" if="{{ menu }}">
+      {{ chapterTitle }} · {{ progress }}
+    </text>
+    <div class="menu-wrap {{ layoutClass }}" if="{{ menu }}">
+      <scroll
+        class="menu-scroll {{ layoutClass }}"
+        scroll-y="true"
+        bounces="true">
+        <div class="menu-rows">
+          <div
+            class="{{ $item.c }}"
+            for="{{ menuRows }}"
+            tid="k"
+            @click="pickMenu($idx)">
+            <text class="menu-t">{{ $item.t }}</text>
+          </div>
+        </div>
+      </scroll>
     </div>
   </div>
 </template>
@@ -1081,62 +1396,36 @@ export default {
     height: 100%;
     background-color: rgba(240, 222, 176, 0.22);
   }
+  /* 顶部信息条：方屏贴顶 top 8；圆屏 top 44（再往上会被圆边裁掉左右两端） */
   .hud {
     position: absolute;
-    left: 104px;
-    top: 62px;
-    width: 208px;
-    height: 30px;
-    line-height: 30px;
-    font-size: 17px;
+    left: 133px;
+    top: 44px;
+    width: 200px;
+    height: 28px;
+    line-height: 28px;
+    font-size: 15px;
     color: #ffe6ef;
     text-align: center;
     lines: 1;
     text-overflow: ellipsis;
     background-color: rgba(0, 0, 0, 0.55);
-    border-radius: 15px;
+    border-radius: 14px;
   }
   .hud.square {
-    left: 20px;
-    top: 12px;
-    width: 300px;
+    left: 23px;
+    top: 8px;
+    width: 420px;
     height: 34px;
     line-height: 34px;
-    font-size: 20px;
+    font-size: 19px;
     text-align: left;
-    padding-left: 12px;
-  }
-  /* 顶部右侧「≡」阅读菜单按钮：DOM 顺序在点击层之后，靠顺序置顶（BlueOS 无 z-index） */
-  .menu-fab {
-    position: absolute;
-    left: 312px;
-    top: 58px;
-    width: 42px;
-    height: 42px;
-    border-radius: 21px;
-    background-color: rgba(27, 21, 32, 0.82);
-    align-items: center;
-    justify-content: center;
-  }
-  .menu-fab.square {
-    left: 410px;
-    top: 8px;
-    width: 44px;
-    height: 44px;
-    border-radius: 22px;
-  }
-  .menu-fab-ico {
-    font-size: 24px;
-    color: #ffd8e6;
-    text-align: center;
-  }
-  .menu-fab-ico.square {
-    font-size: 26px;
+    padding-left: 14px;
   }
   .badge {
     position: absolute;
     left: 63px;
-    top: 104px;
+    top: 40px;
     width: 340px;
     font-size: 15px;
     line-height: 20px;
@@ -1146,17 +1435,17 @@ export default {
   }
   .badge.square {
     left: 23px;
-    top: 56px;
+    top: 52px;
     width: 420px;
   }
-  /* 对白面板：340x186（占屏高约 40%）。上一版 406x290 占 62%，把画面压得太狠。 */
+  /* 对白面板：只做背景。height 由 readerLayout() 按字号算好，行内 style 覆盖这里。 */
   .panel {
     position: absolute;
     left: 63px;
-    bottom: 66px;
+    bottom: 72px;
     width: 340px;
-    height: 186px;
-    background-color: rgba(18, 13, 19, 0.80);
+    height: 198px;
+    background-color: rgba(18, 13, 19, 0.8);
     border-radius: 30px;
   }
   .panel.panel-cg {
@@ -1164,15 +1453,16 @@ export default {
   }
   .panel.square {
     left: 28px;
-    bottom: 20px;
+    bottom: 8px;
     width: 410px;
-    height: 186px;
+    height: 198px;
     border-radius: 30px;
   }
+  /* 说话人条：骑在面板上沿。bottom 由 readerLayout() 随面板高度算出。 */
   .speaker {
     position: absolute;
     left: 83px;
-    bottom: 216px;
+    bottom: 255px;
     width: 300px;
     height: 30px;
     line-height: 30px;
@@ -1187,45 +1477,47 @@ export default {
   }
   .speaker.square {
     left: 63px;
-    bottom: 172px;
+    bottom: 190px;
     width: 340px;
     height: 32px;
     line-height: 32px;
   }
+  /* 正文：字号/行高/高度/lines 由 readerLayout() 统一给出（行内 style 覆盖这三项），
+     分页与渲染共用同一组数字，任何字号下都不会裁掉末行。 */
   .line {
     position: absolute;
     left: 83px;
     bottom: 84px;
     width: 300px;
-    height: 126px;
+    height: 168px;
     color: #ffffff;
     font-weight: bold;
     font-size: 20px;
-    line-height: 24px;
+    line-height: 28px;
     text-align: left;
     lines: 6;
   }
   .line.square {
     left: 63px;
-    bottom: 26px;
+    bottom: 20px;
     width: 340px;
-    height: 140px;
+    height: 168px;
   }
   .next-hint {
     position: absolute;
-    left: 224px;
-    bottom: 68px;
-    width: 20px;
-    height: 20px;
-    line-height: 20px;
-    font-size: 16px;
+    left: 385px;
+    bottom: 76px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    font-size: 15px;
     color: #ff9ec4;
     text-align: center;
   }
   .next-hint.square {
-    left: 406px;
-    bottom: 40px;
-    font-size: 18px;
+    left: 410px;
+    bottom: 26px;
+    font-size: 15px;
   }
   .tap-layer {
     position: absolute;
@@ -1235,7 +1527,8 @@ export default {
     height: 100%;
     background-color: rgba(16, 10, 16, 0.02);
   }
-  .choice-layer {
+  /* 选项：遮罩与滚动区分离（scroll 不支持 position，统一用外层 div 定位） */
+  .choice-scrim {
     position: absolute;
     left: 0px;
     top: 0px;
@@ -1243,10 +1536,14 @@ export default {
     height: 100%;
     background-color: rgba(0, 0, 0, 0.35);
   }
-  .choice-scroll {
+  .choice-wrap {
     position: absolute;
     left: 68px;
-    top: 110px;
+    top: 106px;
+    width: 330px;
+    height: 320px;
+  }
+  .choice-scroll {
     width: 330px;
     height: 320px;
   }
@@ -1298,30 +1595,35 @@ export default {
     color: #7d757f;
     text-align: center;
   }
-  .menu-layer {
+  /* ---------------- 阅读菜单（全屏 scrim + 滚动列表，无嵌套定位容器） ------------- */
+  .menu-scrim {
     position: absolute;
     left: 0px;
     top: 0px;
     width: 466px;
     height: 100%;
-    background-color: #140f17;
+    background-color: rgba(12, 8, 15, 0.96);
   }
   .menu-title {
     position: absolute;
     left: 113px;
-    top: 26px;
+    top: 34px;
     width: 240px;
-    height: 34px;
-    line-height: 34px;
-    font-size: 24px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 23px;
     font-weight: bold;
     color: #ffd8e6;
     text-align: center;
+    lines: 1;
+  }
+  .menu-title.square {
+    top: 40px;
   }
   .menu-sub {
     position: absolute;
     left: 83px;
-    top: 62px;
+    top: 66px;
     width: 300px;
     height: 24px;
     line-height: 24px;
@@ -1331,36 +1633,39 @@ export default {
     lines: 1;
     text-overflow: ellipsis;
   }
-  .menu-btn {
+  .menu-sub.square {
+    top: 74px;
+  }
+  .menu-wrap {
     position: absolute;
     left: 73px;
+    top: 96px;
     width: 320px;
-    height: 36px;
-    border-radius: 18px;
+    height: 500px;
+  }
+  .menu-wrap.square {
+    top: 108px;
+    height: 500px;
+  }
+  .menu-scroll {
+    width: 320px;
+    height: 262px;
+  }
+  .menu-scroll.square {
+    height: 380px;
+  }
+  .menu-rows {
+    width: 320px;
+    flex-direction: column;
+  }
+  .menu-item {
+    width: 320px;
+    height: 52px;
+    margin-bottom: 8px;
+    border-radius: 26px;
     background-color: #2c2133;
     align-items: center;
     justify-content: center;
-  }
-  .menu-row {
-    position: absolute;
-    left: 73px;
-    width: 320px;
-    height: 36px;
-  }
-  .menu-half {
-    top: 0px;
-    width: 154px;
-    height: 36px;
-  }
-  .menu-first {
-    left: 0px;
-  }
-  .menu-second {
-    left: 166px;
-  }
-  .menu-t {
-    font-size: 18px;
-    color: #ffffff;
   }
   .menu-main {
     background-color: #b95079;
@@ -1368,14 +1673,8 @@ export default {
   .menu-quit {
     background-color: #241a2b;
   }
-  /* 9 行菜单：top 92 起，每行 39（高 36 + 间距 3），最后一行 404 + 36 = 440 < 466 */
-  .menu-y0 { top: 92px; }
-  .menu-y1 { top: 131px; }
-  .menu-y2 { top: 170px; }
-  .menu-y3 { top: 209px; }
-  .menu-y4 { top: 248px; }
-  .menu-y5 { top: 287px; }
-  .menu-y6 { top: 326px; }
-  .menu-y7 { top: 365px; }
-  .menu-y8 { top: 404px; }
+  .menu-t {
+    font-size: 20px;
+    color: #ffffff;
+  }
 </style>

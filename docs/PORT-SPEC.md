@@ -12,7 +12,7 @@
 3. **页面数据**：只用 `data`；禁止 `protected`/`public`/`private`（Vela 概念）。路由参数在 `data` 里声明同名属性（`at/load/auto/mode`…），值一律是 String；`onRefresh(query)` 在 singleTask 页面被再次打开时收到参数（onShow 之前执行）。
 4. **事件**：只用 `@click`、`@longpress`、`@touchstart`、`@touchmove`、`@touchend`、`@touchcancel`。**没有 `onswipe`**；`<image>` 不支持事件（要点击/拖动就套 `div` 手势层，并给它 `background-color: rgba(…, 0.02)` 保证能命中）。`list`/`list-item` 用 `@click`/`@longpress`。
 5. **定时器**：禁止直接 `setTimeout/setInterval`；统一用 `common/reader.js` 的 `armTimer/disarmTimer/armInterval/disarmInterval`（IDE 的 feature-api 规则按字面 token 配对，页面里手写很容易误报；统一收口后 lint 0 错）。所有定时器在 `onHide`/`onDestroy` 清理。
-6. **布局**：只用 Flex；禁止 `flex: 1`；禁止 `position` 用在 list-item 内部（list-item 不支持 position）；`scroll` 不支持 margin/padding；**不用百分比宽度**（实机上会被二次换算），所有定位元素用显式 px、`bottom` 锚定；`opacity` 只允许给**空 div**（带子节点的容器用 `rgba()` 背景色，否则实机会渲染成条纹）。
+6. **布局**：只用 Flex；禁止 `flex: 1`；禁止 `position` 用在 list-item 内部（list-item 不支持 position）；`scroll` 不支持 margin/padding；**不用百分比宽度**（实机上会被二次换算），所有定位元素用显式 px、`bottom` 锚定；**所有 `position: absolute` 的元素必须是 `.page` 的直接子节点，禁止嵌套定位容器**（真机会把「absolute 子元素套在定位容器里」的宽度按密度二次换算，参考工程实机 real/sim≈0.46；`validate-pages` 已静态拦截）；需要卡片时用「全屏 scrim + 卡片 flex 列」（见 About 彩蛋菜单），需要滚动列表时用「外层 absolute div + 内层 `<scroll>`」（见 Settings / Game 阅读菜单）；`opacity` 只允许给**空 div**（带子节点的容器用 `rgba()` 背景色，否则实机会渲染成条纹）。
 7. **图片**：`<image>` 必须显式写宽高 + `object-fit`（默认是 cover，但显式写清楚）。资源规格（`tools/gen_assets.py` 已生成，勿手改图片）：
    - 背景 `img/b/*.png` 466×466、CG `img/c/*.png` 466×466、立绘 `img/s/*.png` 139×369、鉴赏宽图 `img/w/*.png` 640×360、缩略图 `img/t/g*.png` 120×68、主页画 `assets/images/home.png` 466×666、图标 `assets/images/icon.png` 114×114。
    - 图片路径通过 `common/asset.js` 的 `imageUri(index)` / `wideUri(index)` 取，不要在页面里手写 `/common/img/...`（除缩略图直接用 `cglist.js` 的 `th` 字段）。
@@ -28,26 +28,30 @@
 ```js
 import {
   DESIGN_WIDTH,            // 466
-  MAX_LINES,               // 6
+  MAX_LINES,               // 6（单页最多行数）
   SIZE_MIN, SIZE_MAX,      // 14 / 30
-  PANEL, NAME, TEXT, NEXT_HINT, HUD, VIEWPORT, SPRITE,  // {round:{...}, square:{...}} 几何
-  normalizeShape, detectShape, viewportHeight,
+  LINE_FACTOR,             // 1.4（行高 = round(字号 × 1.4)）
+  PANEL, NAME, TEXT, NEXT_HINT, HUD, MENU, VIEWPORT, SAFE_CIRCLE, SPRITE, // {round:{...}, square:{...}}
+  normalizeShape, detectShape, shapeFromViewport, viewportHeight,
+  lineHeightOf,            // (size) -> 行高 px
   paginationMetrics,       // (size, shape) -> {shape,fontSize,lineHeight,charsPerLine,linesPerPage,textWidth,textHeight}
-  textStyle,               // (size) -> 'font-size: 20px; line-height: 24px;'
+  readerLayout,            // (size, shape) -> 实时版面（含 lineStyle/panelStyle/nameStyle 字符串）
+  textStyle,               // (size) -> 'font-size: 20px; line-height: 28px;'
 } from '../../common/layout.js'
 ```
-几何（页面 CSS 必须一致）：
-- 对白面板 round：left 63 / bottom 66 / 340×186 / 圆角 30；square：left 28 / bottom 20 / 410×186 / 圆角 30。
-  （圆屏占屏高 40%，可在 `layout.js` 里 `PANEL.round.height` 一处调整；validate-pages 会拦 >55%）
-- 说话人 round：left 83 / bottom 216 / 300×30；square：left 63 / bottom 172 / 340×32。
-- 正文 round：left 83 / bottom 84 / 300×126；square：left 63 / bottom 26 / 340×140。
-- ▼ round：left 316 / bottom 74；square：left 396 / bottom 34。
-- HUD round：left 104 / top 62 / 208×30；square：left 20 / top 12 / 300×34。
-- 「≡」阅读菜单按钮 round：left 312 / top 58 / 42×42；square：left 410 / top 8 / 44×44
-  （DOM 顺序必须在 `.tap-layer` 之后，否则点击被点击层吃掉；绑定 `@click="openMenu"`）。
+几何（页面 CSS 的静态值必须等于 `readerLayout(20, shape)`；字号相关的高度一律由 `readerLayout` 算好绑到行内 style）：
+- 对白面板 round：left 63 / bottom 72 / 340×198（默认字号 20 时）/ 圆角 30；square：left 28 / bottom 8（贴底）/ 410×198 / 圆角 30。
+  `panelHeight = padTop(18) + 行数×行高 + padBottom(12)`，行数由字号决定；validate-pages 会拦 >55% 占屏高。
+- 说话人 round：left 83 / 300×30，bottom 由 `readerLayout().nameBottom` 给出（骑在面板上沿）；square：left 63 / 340×32。
+- 正文 round：left 83 / width 300 / 可用高 168 / bottom 84（末行角距圆心 211 < 215）；square：left 63 / 340 / 可用高 200 / bottom 20。
+  正文块高度 = 行数×行高（行内 style 覆盖），**分页与渲染共用同一组数字，任何字号下都不会裁末行**。
+- ▼ round：left 385 / bottom 76；square：left 410 / bottom 26（都在面板右侧留白里）。
+- HUD round：left 133 / top 44 / 200×28（圆屏再往上会被圆边裁掉两端）；square：left 23 / top 8（贴顶）/ 420×34。
+- 阅读菜单（`MENU`）：全屏 scrim + 标题（round top 34 / square top 40）+ 副标题 + 「外层 absolute div（round top 96、320×262；square top 108、320×380）+ 内层 `<scroll>`」；条目在 flex 列里流式排布，每项 320×52、间距 8，可滚动。
+- **顶部「≡」阅读菜单按钮已移除**（真机反馈遮挡字幕）：菜单入口 = 屏幕上下滑 / 返回手势；`validate-pages` 会拦残留的 `menu-fab`。
 - 立绘三槽：139×369、bottom 0、left 14 / 164 / 313。
-- 屏幕设计高度：round 466，square 554。
-- 圆屏安全区：validate-pages 会校验正文块四角、面板上沿、菜单按钮右上角到 (233,233) 的距离 ≤215。
+- 屏幕设计高度：round 466，square 554。圆屏安全区：圆心 (233,233)、半径 215（`SAFE_CIRCLE`），validate-pages 会对**全部字号**校验正文块四角、面板上沿、说话人条、HUD 都在圆内。
+- 圆/方屏判定：`detectShape($device)` 为主，Game 页再用 `getBoundingClientRect` 实测宽高比经 `shapeFromViewport()` 校正一次（老 ROM 可能只报 `watch`）。
 
 ### `src/common/reader.js`
 设置/分页/storage/定时器（见文件头注释）。关键导出：
@@ -114,7 +118,7 @@ loader.readChunk(chunk, (nodes)=>{}) // 节点数组或 null
 ### 3.4 Settings（`/pages/Settings`）
 - 设置项与源工程一致：字号 `size` 14–30（−/＋ 1）；播放速度 `speed` 0–120 毫秒/字（−/＋ 2，0 显示“瞬间”）；自动播放 `autoMs` 0–200 毫秒/字（−/＋ 10，0 显示“关闭”）；屏幕常亮 `keepOn`（关/开）；长按行为 `longpress`（隐藏/快进/关闭）。
 - 交互：`apply(patch)` = `normalizeSettings(Object.assign({}, settings, patch))` → 刷新文案/预览 → 300ms 防抖 `saveSettings`；返回/onDestroy 时 `flush()` 立即写盘。重置 = `normalizeSettings(DEFAULT_SETTINGS)` + toast「已恢复默认设置」。
-- 布局：标题 top 44；`<scroll class="scroll" scroll-y="true" bounces="true">` 容器 top 100、left 53、宽 360、height round 250 / square 338；内容列 flex column 宽 360。每行 62 高：label 宽 150（字号 22 加粗 #f5e1e8）、− 按钮 46×46、数值宽 64 居中（字号 24 #ffd8e6）、＋ 按钮 46×46；灰色提示行字号 16。开关行：标签 + 2/3 个药丸按钮（74×40，选中 #b95079）。预览卡片 360×104（rgba(18,13,19,0.9)，圆角 14，说话人字号 18，正文用 `textStyle(size)` 动态 style，宽 320）。
+- 布局：标题 top 44；`<scroll class="scroll" scroll-y="true" bounces="true">` 容器 top 100、left 53、宽 360、height round 250 / square 338；内容列 flex column 宽 360。每行 62 高：label 宽 150（字号 22 加粗 #f5e1e8）、− 按钮 46×46、数值宽 64 居中（字号 24 #ffd8e6）、＋ 按钮 46×46；灰色提示行字号 16。开关行：标签 + 2/3 个药丸按钮（74×40，选中 #b95079）。预览卡片 360×136（rgba(18,13,19,0.9)，圆角 14，说话人字号 18，正文用 `textStyle(size)` 动态 style、宽 320、高 92、lines 2；高度按最大字号 30（行高 42）留足 2 行，否则预览末行会被裁）。
 - 底部：重置/返回两个 152×50 按钮（left 113 / 241，bottom 24）。
 - **不用 slider**（源工程有 slider，但 BlueOS 参考工程实机验证改用步进；在 `docs/PORT-NOTES.md` 记录为优化项）。
 

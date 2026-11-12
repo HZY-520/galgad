@@ -108,7 +108,7 @@ check('paginationMetrics 边界（字号 14-30 / 圆方屏）', () => {
       const m = layout.paginationMetrics(size, shape)
       assert(m.shape === shape, `paginationMetrics(${size},${shape}).shape 异常`)
       assert(m.fontSize === size, `fontSize 应=${size}`)
-      assert(m.lineHeight === size + 4, `lineHeight 应=${size + 4}，实际 ${m.lineHeight}`)
+      assert(m.lineHeight === layout.lineHeightOf(size), `lineHeight 应=lineHeightOf(${size})=${layout.lineHeightOf(size)}，实际 ${m.lineHeight}`)
       assert(m.charsPerLine === Math.max(4, Math.floor((box.width - 12) / size)), `charsPerLine 公式异常（${size}/${shape}: ${m.charsPerLine}）`)
       assert(m.linesPerPage === Math.max(1, Math.min(layout.MAX_LINES, Math.floor(box.height / m.lineHeight))), `linesPerPage 公式异常（${size}/${shape}: ${m.linesPerPage}）`)
       assert(m.linesPerPage >= 1 && m.linesPerPage <= layout.MAX_LINES, `linesPerPage 越界: ${m.linesPerPage}`)
@@ -127,7 +127,39 @@ check('paginationMetrics 边界（字号 14-30 / 圆方屏）', () => {
   return 'ok'
 })
 
-// ---------------------------------------------------------------- 2. 全量分页不变量
+// ---------------------------------------------------------------- 2. readerLayout 自适应
+check('readerLayout 自适应（行数×行高 = 渲染框高，且不超可用高度 / 圆屏安全圆）', () => {
+  for (const shape of ['round', 'square']) {
+    for (let size = layout.SIZE_MIN; size <= layout.SIZE_MAX; size += 1) {
+      const g = layout.readerLayout(size, shape)
+      const m = layout.paginationMetrics(size, shape)
+      assert(g.linesPerPage === m.linesPerPage, `${shape}/${size}：readerLayout 与 paginationMetrics 行数不一致`)
+      assert(g.textHeight === g.linesPerPage * g.lineHeight,
+        `${shape}/${size}：textHeight=${g.textHeight} != 行数×行高=${g.linesPerPage * g.lineHeight}（会裁字）`)
+      assert(g.textHeight <= g.textMaxHeight, `${shape}/${size}：textHeight=${g.textHeight} 超过可用 ${g.textMaxHeight}`)
+      assert(g.panelHeight === g.padTop + g.textHeight + g.padBottom, `${shape}/${size}：面板高度与留白+正文不一致`)
+      assert(new RegExp('lines: ' + g.linesPerPage + ';').test(g.lineStyle), `${shape}/${size}：行内 style 未带 lines`)
+      assert(new RegExp('height: ' + g.textHeight + 'px').test(g.lineStyle), `${shape}/${size}：行内 style 未带正文高度`)
+      assert(new RegExp('height: ' + g.panelHeight + 'px').test(g.panelStyle), `${shape}/${size}：面板 style 未带高度`)
+      if (shape === 'round') {
+        const vh = layout.VIEWPORT.round
+        const textTop = vh - g.textBottom - g.textHeight
+        for (const [x, y] of [
+          [g.textLeft, textTop],
+          [g.textLeft + g.textWidth, textTop],
+          [g.textLeft, textTop + g.textHeight],
+          [g.textLeft + g.textWidth, textTop + g.textHeight],
+        ]) {
+          const dist = Math.sqrt((x - 233) * (x - 233) + (y - 233) * (y - 233))
+          assert(dist <= 215, `圆屏/${size}：正文块角距圆心 ${dist.toFixed(1)} > 215（会被圆边裁字）`)
+        }
+      }
+    }
+  }
+  return 'ok'
+})
+
+// ---------------------------------------------------------------- 3. 全量分页不变量
 check('全 5457 句 × 17 字号 × 圆/方屏分页不变量', () => {
   const shapes = ['round', 'square']
   const sizes = []

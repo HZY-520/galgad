@@ -234,14 +234,19 @@ async function main() {
 
   const page = makeInstance(def, 'watch-square')
 
-  // ---------------- 0. 模板结构：顶部「≡」菜单按钮必须存在且在点击层之后
+  // ---------------- 0. 模板结构：扁平化定位层 + 自适应行内 style + 无顶部「≡」按钮
   const uxText = fs.readFileSync(PAGE_UX, 'utf8')
   const tapIdx = uxText.indexOf('class="tap-layer"')
-  const fabIdx = uxText.indexOf('class="menu-fab')
   check(tapIdx > 0, '模板存在阅读点击层 .tap-layer')
-  check(fabIdx > 0, '模板存在顶部「≡」菜单按钮 .menu-fab（真机反馈：没有菜单入口）')
-  check(fabIdx > tapIdx, '「≡」按钮在 DOM 顺序上位于点击层之后（否则点击被点击层吃掉）')
-  check(/menu-fab[\s\S]{0,160}?@click="openMenu"/.test(uxText), '「≡」按钮绑定 @click="openMenu"')
+  check(uxText.indexOf('id="game-root"') > 0, '根节点带 id="game-root"（供 getBoundingClientRect 实测视口）')
+  check(uxText.indexOf('menu-fab') < 0, '顶部「≡」阅读菜单按钮已移除（真机反馈遮挡字幕）')
+  check(/class="menu-scrim"/.test(uxText), '阅读菜单使用全屏 scrim 层')
+  check(/for="\{\{\s*menuRows\s*\}\}"/.test(uxText), '阅读菜单按钮由 menuRows 列表渲染（流式列，非嵌套绝对定位）')
+  // <scroll> 的属性按多行书写，`class` 后还有 scroll-y / bounces，故匹配到 `>` 后再找 menu-rows
+  check(/<scroll[^>]*class="menu-scroll[\s\S]{0,240}?<div class="menu-rows">/.test(uxText), '菜单按钮放在滚动容器里（12 项可滚动）')
+  for (const name of ['lineStyle', 'panelStyle', 'nameStyle']) {
+    check(new RegExp(`style="\\{\\{\\s*${name}\\s*\\}\\}"`).test(uxText), `正文/面板/说话人绑定行内 style（${name}）→ 字号变化自适应`)
+  }
 
   // ---------------- 1. 首次进入（新游戏）
   let err = guard('onInit', () => page.onInit())
@@ -316,6 +321,17 @@ async function main() {
     page2.openMenu(); page2.closeMenu()
   })
   check(!err, '阅读菜单 12 个按钮调用均不抛异常')
+  check(Array.isArray(page2.menuRows) && page2.menuRows.length === 12,
+    '菜单条目表 menuRows 共 12 项（滚动列表渲染源）', `rows=${page2.menuRows && page2.menuRows.length}`)
+  err = guard('菜单分发 pickMenu', () => {
+    for (let i = 0; i < page2.menuRows.length; i += 1) {
+      page2.openMenu()
+      page2.pickMenu(i)
+    }
+    page2.openMenu()
+    page2.pickMenu(99)   // 越界不应抛异常
+  })
+  check(!err, 'pickMenu 按索引分发 12 项（含越界）均不抛异常')
   const routes = router.__calls.map((c) => c.type + ':' + (c.uri || ''))
   check(routes.some((r) => r.includes('replace:') && r.includes('pages/Home')), '「主页」按钮走 router.replace 回主页', routes.slice(-4).join(' , '))
   check(routes.some((r) => r.startsWith('push:') && r.includes('pages/Saves')), '「保存/读取」跳转存档页', routes.filter((r) => r.includes('Saves')).join(' , '))
@@ -369,8 +385,19 @@ async function main() {
   })
   check(!err, '从设置页返回（字号 30）触发重排不抛异常')
   check(/font-size: 30px/.test(page4.lineStyle), '字号 30 已被应用到正文行内样式（onShow 生效）', page4.lineStyle)
+  check(/lines: 4;/.test(page4.lineStyle) && /height: 168px;/.test(page4.lineStyle),
+    '字号 30 的行数与正文高度同步重算（lines 4 / 168px，行高 42）', page4.lineStyle)
+  check(/height: 198px/.test(page4.panelStyle), '字号 30 的面板高度同步重算（198px = 18+168+12）', page4.panelStyle)
   check(typeof page4.pageText === 'string' && page4.pageText.length > 0, '重排后仍然渲染出完整字幕',
     JSON.stringify((page4.pageText || '').slice(0, 12)))
+  // 小字号：可用高度内能放满 6 行，正文块高度随字号缩小（不会出现「分页 6 行、框只够 5 行」）
+  err = guard('字号 14 重排', () => {
+    storage.__map.set('settings', JSON.stringify({ size: 14, speed: 28, autoMs: 0, keepOn: true, longpress: 'off' }))
+    page4.onShow()
+    tick(500)
+  })
+  check(!err && /lines: 6;/.test(page4.lineStyle) && /height: 120px;/.test(page4.lineStyle),
+    '字号 14：6 行 × 行高 20 = 120px 正文框（分页与渲染同源）', page4.lineStyle)
   storage.__map.delete('settings')
   err = guard('结局页返回', () => {
     page4.endText = '—— 全剧终 ——'

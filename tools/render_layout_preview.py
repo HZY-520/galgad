@@ -67,6 +67,16 @@ def js_const(name):
     return json.loads(body)
 
 
+def js_number(name):
+    """从 layout.js 里抠出 `export const NAME = 123`（数字常量）。"""
+    text = io.open(LAYOUT_JS, encoding="utf-8").read()
+    m = re.search(r"export const %s = ([0-9.]+)" % name, text)
+    if not m:
+        raise RuntimeError("layout.js 里找不到 %s" % name)
+    return float(m.group(1))
+
+
+
 def sample_dialogue():
     """取一段真实台词（优先挑 3~4 行的长句）。"""
     try:
@@ -97,8 +107,11 @@ def rounded(draw, box, radius, fill):
 
 def render(shape, out_dir):
     L = {}
-    for name in ("PANEL", "NAME", "TEXT", "NEXT_HINT", "HUD", "MENU_BTN", "VIEWPORT", "SPRITE"):
+    for name in ("PANEL", "NAME", "TEXT", "NEXT_HINT", "HUD", "VIEWPORT", "SPRITE"):
         L[name] = js_const(name)
+    line_factor = js_number("LINE_FACTOR")
+    default_size = 20
+    line_h = int(round(default_size * line_factor))
     viewport_h = L["VIEWPORT"][shape]
     width = 466
     height = viewport_h
@@ -122,13 +135,19 @@ def render(shape, out_dir):
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
 
+    # 对白面板：高度按「默认字号 20」的 readerLayout 算（panelH = padTop + 行数×行高 + padBottom）
+    text_cfg = L["TEXT"][shape]
     panel = L["PANEL"][shape]
-    panel_top = height - panel["bottom"] - panel["height"]
-    rounded(d, [panel["left"], panel_top, panel["left"] + panel["width"], panel_top + panel["height"]],
+    capacity = max(1, min(6, text_cfg["height"] // line_h))
+    text_h = capacity * line_h
+    panel_h = panel["padTop"] + text_h + panel["padBottom"]
+    panel_top = height - panel["bottom"] - panel_h
+    rounded(d, [panel["left"], panel_top, panel["left"] + panel["width"], panel_top + panel_h],
             panel["radius"], (18, 13, 19, 204))
 
+    # 说话人条：骑在面板上沿（与 readerLayout 的 nameBottom 一致）
     name_cfg = L["NAME"][shape]
-    name_top = height - name_cfg["bottom"] - name_cfg["height"]
+    name_top = panel_top - name_cfg["height"] // 2
     rounded(d, [name_cfg["left"], name_top, name_cfg["left"] + name_cfg["width"], name_top + name_cfg["height"]],
             15, (16, 11, 18, 190))
 
@@ -136,34 +155,25 @@ def render(shape, out_dir):
     rounded(d, [hud["left"], hud["top"], hud["left"] + hud["width"], hud["top"] + hud["height"]],
             hud["height"] // 2, (0, 0, 0, 140))
 
-    fab = L["MENU_BTN"][shape]
-    rounded(d, [fab["left"], fab["top"], fab["left"] + fab["width"], fab["top"] + fab["height"]],
-            fab["radius"], (27, 21, 32, 210))
-
-    text_cfg = L["TEXT"][shape]
-    text_top = height - text_cfg["bottom"] - text_cfg["height"]
+    text_top = height - text_cfg["bottom"] - text_h
 
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay)
     d = ImageDraw.Draw(canvas)
 
-    # 顶部信息 + 菜单按钮图标
+    # 顶部信息条
     d.text((hud["left"] + hud["width"] // 2, hud["top"] + hud["height"] // 2), "第一幕 · 月幕 · 12%",
            font=load_font(hud["size"]), fill=(255, 230, 239), anchor="mm")
-    d.text((fab["left"] + fab["width"] // 2, fab["top"] + fab["height"] // 2 - 2), "≡",
-           font=load_font(fab["size"]), fill=(255, 216, 230), anchor="mm")
 
     # 说话人
     speaker = "林曦"
     d.text((name_cfg["left"] + name_cfg["width"] // 2, name_top + name_cfg["height"] // 2), speaker,
            font=load_font(22), fill=(255, 216, 230), anchor="mm")
 
-    # 正文：字号 20、行高 24、每行 floor((宽-12)/20)
+    # 正文：字号 20、行高 round(20×1.4)=28、每行 floor((宽-12)/20)
     text, _ = sample_dialogue()
-    size = 20
-    line_h = size + 4
+    size = default_size
     cpl = max(4, (text_cfg["width"] - 12) // size)
     lines = wrap(text, cpl)
-    capacity = max(1, min(6, text_cfg["height"] // line_h))
     font = load_font(size, bold=True)
     for i, line in enumerate(lines[:capacity]):
         d.text((text_cfg["left"], text_top + i * line_h), line, font=font, fill=(255, 255, 255))
@@ -186,10 +196,10 @@ def render(shape, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "game-%s.png" % shape)
     canvas.convert("RGB").save(path, "PNG")
-    ratio = panel["height"] / float(viewport_h) * 100
-    print("  %-6s 面板 %dx%d（占屏高 %.1f%%）、正文 %dx%d（每行 %d 字 / %d 行）→ %s"
-          % (shape, panel["width"], panel["height"], ratio,
-             text_cfg["width"], text_cfg["height"], cpl, capacity, os.path.relpath(path, ROOT)))
+    ratio = panel_h / float(viewport_h) * 100
+    print("  %-6s 面板 %dx%d（占屏高 %.1f%%）、正文 %dx%d（每行 %d 字 / %d 行 × 行高 %d）→ %s"
+          % (shape, panel["width"], panel_h, ratio,
+             text_cfg["width"], text_h, cpl, capacity, line_h, os.path.relpath(path, ROOT)))
     return path
 
 

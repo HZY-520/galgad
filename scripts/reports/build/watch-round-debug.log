@@ -1,8 +1,8 @@
 [INFO] blueos-pack: 1.0.12-beta.13; vite: 5.4.21; node: 24.21.0; commit: 7a50283d
 缓存失效，清除缓存. cached: undefined
 [INFO] NODE_PLATFORM: cli; NODE_PHASE: dev; NODE_ENV: development; PLATFORM: win32
-[INFO] clean output: 0.048s
-[INFO] apply cache: 0s
+[INFO] clean output: 0.018s
+[INFO] apply cache: 0.001s
 
 warn - As of Tailwind CSS v2.2, `lightBlue` has been renamed to `sky`.
 warn - Update your configuration file to silence this warning.
@@ -26,7 +26,7 @@ warn - https://tailwindcss.com/docs/upgrade-guide#configure-content-sources
 warn - The `darkMode` option in your Tailwind CSS configuration is set to `false`, which now behaves the same as `media`.
 warn - Change `darkMode` to `media` or remove it entirely.
 warn - https://tailwindcss.com/docs/upgrade-guide#remove-dark-mode-configuration
-[INFO] compile rest pages: 1.769s
+[INFO] compile rest pages: 1.065s
 
 warn - As of Tailwind CSS v2.2, `lightBlue` has been renamed to `sky`.
 warn - Update your configuration file to silence this warning.
@@ -50,7 +50,7 @@ warn - https://tailwindcss.com/docs/upgrade-guide#configure-content-sources
 warn - The `darkMode` option in your Tailwind CSS configuration is set to `false`, which now behaves the same as `media`.
 warn - Change `darkMode` to `media` or remove it entirely.
 warn - https://tailwindcss.com/docs/upgrade-guide#remove-dark-mode-configuration
-[INFO] compile rest pages: 3.196s
-[INFO] copy resources: 0.655s
-[INFO] generate dist file: 2.792s
-[INFO] finish compile in 8.383s
+[INFO] compile rest pages: 1.956s
+[INFO] copy resources: 0.519s
+[INFO] generate dist file: 3.49s
+[INFO] finish compile in 7.105s

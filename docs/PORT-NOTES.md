@@ -27,14 +27,14 @@
 | 页面数据 | `protected`（与 `data` 不能共存） | `data`（路由参数同名接收） |
 | 页面栈 | 多实例 | 全部页面 `singleTask`；`Game`/`Gallery` 配 `followHand:disable` 以接管返回手势 |
 | 剧本加载 | 44 个 `.txt`（内容是 JSON）+ 运行时索引 | 44 个 **`.json`** 随包资源 + `file.readText` + 同块并发合并 + 只缓存当前/下一块 |
-| 长对白 | 6 个固定 `<text>` 槽位 + 运行时按字号分页 | 单 `<text>` + 运行时按字号分页（蓝河 `lines` 行数上限 6） |
+| 长对白 | 6 个固定 `<text>` 槽位 + 运行时按字号分页 | 单 `<text>` + 运行时按字号分页（蓝河 `lines` 行数上限 6）；**行数 / 行高 / 正文框高由 `layout.readerLayout()` 同源给出**（分页 6 行就一定有 6 行的高度，不再裁末行） |
 | 背景动效 | 672 宽全景图 + 10fps 定时器推进 `left` | **改为静态 cover 背景**（低性能手表省 CPU/电量；见 §2） |
 | 立绘 | 3 固定槽位 143×380 | 3 固定槽位 139×369（按 466/480 等比缩放） |
 | CG | 854×480 宽图 + touchmove 拖动 | 正文 466×466 cover；鉴赏 640×360 宽图按 828×466 显示、可拖动看全图 |
 | CG 鉴赏 | 9 组 / 32 张差分，`touchmove` + `onswipe` + 热区 | 9 组 / 32 张；`touchstart/move/end` 拖动 + 左右热区兜底 |
 | 设置 | 3 个 slider + 2 个开关 | **−/＋ 步进** + 药丸开关（滑块在蓝河实机上不可靠，参考工程已改用步进） |
 | 屏幕常亮 | `@system.brightness` | `@blueos.hardware.display.brightness.setKeepScreenOn` |
-| 输入/手势 | Vela 的 `onswipe` / `onlongpress` | 无 `onswipe`：顶部「≡」按钮 + 下滑手势开菜单，`touchstart/touchend` 坐标自算右滑快退；长按用 `longpress` + 自计时快进 |
+| 输入/手势 | Vela 的 `onswipe` / `onlongpress` | 无 `onswipe`：**上滑/下滑手势 + 返回手势打开阅读菜单**（顶部「≡」按钮按真机反馈移除，它遮挡顶部字幕）、`touchstart/touchend` 坐标自算右滑快退；长按用 `longpress` 自计时快进 |
 | 彩蛋 | 关于页连点 7 次 + 小鱼干剧场 | 完整保留（解锁后日谈 / 解锁全部 CG / 29 句小鱼干） |
 
 **内容完整性**：5569 个剧本节点（5457 句台词、15 个选择点 / 53 个选项）、
@@ -60,12 +60,24 @@ Bad End）、127 张图片索引（38 背景 + 55 立绘 + 34 CG）、9 组 32 �
    BlueOS IDE 的 feature-api 静态检查，`onHide/onDestroy` 全部清理。
 6. **半透明全部用 rgba 背景色**：不给带子节点的容器加 `opacity`（实机渲染陷阱）；
    所有定位元素都是页面根节点的直接子节点、显式 px、`bottom` 锚定（规避真机
-   DPR≠1 时嵌套容器宽度被二次换算的问题）。
-7. **屏幕常亮可关**：设置页关掉后不再调用 keepScreenOn；默认开。
-8. **首屏看门狗与屏上状态徽标**：加载失败/卡住时在屏幕顶部显示阶段信息
-   （`badge`），并用 `console.log('[GalGod] …')` 分阶段打日志，便于真机排障。
-9. **无 slider / 无 scrollview / 无 onswipe / 无 z-index / 无 overflow 依赖**：
-   全部换成蓝河文档与参考工程实机验证过的组件与写法。
+   DPR≠1 时嵌套容器宽度被二次换算的问题）。阅读菜单/选项层都是「全屏 scrim +
+   外层 absolute 容器 + 内层 `<scroll>`」，按钮在 flex 列里流式排布，不做逐个绝对定位。
+7. **对白版面自适应（2026-11 真机回归）**：行高 = `round(字号 × 1.4)`；
+   `readerLayout(size, shape)` 一次算出「每页行数 / 正文框高 / 面板高 / 说话人条位置」，
+   同时产出 `lineStyle / panelStyle / nameStyle` 三个行内 style 绑到模板上。
+   分页与渲染共用同一组数字——这是「长句末行显示不全」的根因修复（旧版分页按
+   `floor(126/24)=5` 行排，而 CSS 框只有 126 高且 `lines: 6`，实机行框略高就会吃掉末行）。
+   纵向一律 `bottom` 锚定：方屏面板 bottom 8 贴底、顶栏 top 8 贴顶；圆屏受安全圆限制
+   （正文末行角距圆心 ≤215）只能到面板 bottom 72 / 顶栏 top 44，再往下/往上就会裁字；
+   面板上留白取 18px（> 说话人条半高 15），说话人条压在面板上沿也不会盖住首行。
+8. **屏型实测兜底**：Game 页 `onShow` 用根节点 `getBoundingClientRect` 量一次宽高比，
+   经 `shapeFromViewport()`（设计高 ≥505 → 方屏）校正圆/方屏并重排；老 ROM 的
+   `$device.deviceType` 只报 `watch` 时也能拿到正确版面（失败则静默退回 `$device`）。
+9. **屏幕常亮可关**：设置页关掉后不再调用 keepScreenOn；默认开。
+10. **首屏看门狗与屏上状态徽标**：加载失败/卡住时在屏幕顶部显示阶段信息
+    （`badge`），并用 `console.log('[GalGod] …')` 分阶段打日志，便于真机排障。
+11. **无 slider / 无 scrollview / 无 onswipe / 无 z-index / 无 overflow 依赖**：
+    全部换成蓝河文档与参考工程实机验证过的组件与写法。
 
 ## 3. 目录结构
 
@@ -143,15 +155,21 @@ python tools/gen_assets.py
 | 页面静态规范 | `tools/validate-pages.mjs` | 三段式 / 路由 / 事件与组件白名单 / CSS 红线 / features / 几何常量 / 版本号 |
 | 引擎逻辑 | `tools/test-engine.mjs` | 全节点顺序执行、8 条策略、4 结局可达、通关判定、章节过滤、5457 个 say 存档往返 |
 | 分页排版 | `tools/test-reader.mjs` | 5457 句 × 字号 14–30 × 圆/方屏（185,538 次）：不丢字 / 不超行 / 不超页 / 行宽不超 |
-| 页面运行时（Game） | `tools/test-game-page.mjs` | 真实执行 Game 页脚本：进入阅读、60 次点击、4795 步到结局、菜单 12 按钮、手势、字号重排、自动/手动读档、`at` 跳转、销毁清理（46 项） |
+| 页面运行时（Game） | `tools/test-game-page.mjs` | 真实执行 Game 页脚本：模板结构（扁平化定位层 / 无 `menu-fab` / 行内 style 绑定）、进入阅读、60 次点击、4795 步到结局、菜单 12 项 + `pickMenu` 分发、手势、字号 14/30 重排与版面同步、自动/手动读档、`at` 跳转、销毁清理（56 项） |
 | 页面运行时（其余 6 页） | `tools/test-pages.mjs` | Home 21 / Saves 49 / Chapters 22 / Gallery 43 / Settings 48 / About 39（222 项） |
 | 官方构建 | `tools/build.mjs` | watch-round + watch-square 整包构建，`[INFO] finish compile` 且无 `[ERROR]`；rpk 内容断言（21 页面 / 45 剧本 / 171 图片） |
 
-实测：`npm run verify` exit 0，全部 PASS；两个 rpk 各 15.05 MiB。详细数字与产物清单见
-`docs/VERIFICATION.md`（含 2026-11-10 真机 `onTap` 崩溃的根因与修复记录）。
+实测：`npm run verify` exit 0，全部 PASS；两个 rpk 各 15.07 MiB。详细数字与产物清单见
+`docs/VERIFICATION.md`（含 2026-11-10 真机 `onTap` 崩溃、2026-11-12 真机菜单/字幕版面的根因与修复记录）。
 
 ## 6. 真机注意事项 / 已知风险
 
+- **阅读菜单入口**：顶部「≡」按钮已移除（真机反馈遮挡顶部字幕/信息条），改为
+  **屏幕上下滑**或**返回手势**打开；如果某台设备既不派发 `touchstart/touchend`
+  也不派发返回键，菜单将无法打开（这是当前唯一入口风险，回归时请先验证这两种手势）。
+- **屏型实测**：`$device.deviceType` 与实际屏幕不一致时，Game 页会在 `onShow` 用
+  `getBoundingClientRect` 实测一次并自我校正；若该 API 不可用则静默退回 `$device`
+  （日志里会打印「视口 WxH (shape)」便于真机确认）。
 - **屏幕常亮接口**：`@blueos.hardware.display.brightness.setKeepScreenOn` 在本机
   模拟器与参考工程中未实测；已包 `try/catch`，失败只是不常亮，不影响阅读。
 - **鉴赏宽图缩放**：640×360 资源按 828×466 显示（约 1.29× 放大），来自宽图
@@ -161,5 +179,6 @@ python tools/gen_assets.py
 - **模拟器 vs 真机**：本工程按参考工程 `galgame` 的实机结论规避了
   百分比宽度、嵌套定位容器、`opacity` 容器、表冠 delta 等陷阱；仍建议在
   vivo WATCH GT 2 上按 `docs/VERIFICATION.md` 的清单人工回归一次
-  「开始 → 连续翻页 → 选项 → 存档 → 读档 → CG 鉴赏 → 设置 → 关于彩蛋」。
+  「开始 → 连续翻页（含长句多行）→ 上下滑开菜单 → 选项 → 存档 → 读档 →
+  CG 鉴赏 → 设置（字号 14/30 各看一句）→ 关于彩蛋」。
 - 应用包名 `galgad.lico`、名称「想成为Gal神」、版本 `1.0.0`。

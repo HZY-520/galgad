@@ -5,8 +5,8 @@
   "device": "watch-round",
   "mode": "debug",
   "command": "D:\\BlueOSStudio\\resources\\app\\extensions\\blueos-debugger\\node_modules\\blueos-pack\\bin\\index.js build --device-type watch-round -f",
-  "startedAt": "2026-11-10T11:38:43.452Z",
-  "elapsedMs": 9666,
+  "startedAt": "2026-11-12T12:31:56.338Z",
+  "elapsedMs": 8043,
   "exitCode": 0,
   "signal": null,
   "hasSuccessMarker": true,
@@ -14,17 +14,17 @@
   "entryOnly": false,
   "rpk": {
     "file": "dist/watch-round/debug/galgad.lico.debug.1.0.0.rpk",
-    "size": 15787719,
-    "sizeText": "15.06 MB",
+    "size": 15799762,
+    "sizeText": "15.07 MB",
     "fresh": true,
-    "mtime": "2026-11-10T11:38:53.050Z"
+    "mtime": "2026-11-12T12:32:04.242Z"
   },
   "rpkContents": {
     "pass": true,
     "errors": [],
     "warnings": [],
     "stats": {
-      "rpkBytes": 15787719,
+      "rpkBytes": 15799762,
       "outerEntries": [
         "META-INF/",
         "META-INF/CERT",
@@ -90,7 +90,7 @@
         "commonImg": 169,
         "assetsImages": 2
       },
-      "rpkMiB": 15.06
+      "rpkMiB": 15.07
     }
   },
   "errorLines": [],

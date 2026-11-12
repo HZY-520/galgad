@@ -373,10 +373,11 @@ export default {
     height: 44px;
     lines: 2;
   }
-  /* 实时预览卡片 360×104：说话人固定 18，正文由 pvStyle 动态给字号/行高 */
+  /* 实时预览卡片 360×136：说话人固定 18，正文由 pvStyle 动态给字号/行高。
+     高度按最大字号（30px → 行高 42）留足 2 行，否则预览末行会被裁掉。 */
   .pv {
     width: 360px;
-    height: 104px;
+    height: 136px;
     margin-top: 12px;
     margin-bottom: 12px;
     padding-left: 14px;
@@ -394,7 +395,7 @@ export default {
   }
   .pv-line {
     width: 320px;
-    height: 70px;
+    height: 92px;
     color: #ffffff;
     lines: 2;
     text-overflow: ellipsis;

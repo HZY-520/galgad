@@ -33,9 +33,9 @@
     },
     {
       "file": "C:\\Users\\Administrator\\BlueOSProjects\\galgad\\src\\pages\\Game\\index.ux",
-      "definedCount": 70,
-      "callCount": 145,
-      "handlerCount": 22,
+      "definedCount": 75,
+      "callCount": 167,
+      "handlerCount": 10,
       "errors": []
     },
     {
@@ -60,5 +60,5 @@
       "errors": []
     }
   ],
-  "generatedAt": "2026-11-10T11:38:40.434Z"
+  "generatedAt": "2026-11-12T12:32:53.587Z"
 }

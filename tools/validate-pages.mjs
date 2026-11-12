@@ -748,7 +748,8 @@ function checkPage(pageName) {
     if (pageRule.decls.height === undefined) w('.page 未设置 height（通常为 100%）')
   }
 
-  // ---- F. Game 页几何常量与 layout.js 一致
+  // ---- F. Game 页：静态 CSS 必须等于默认字号（20）的 readerLayout 版面，
+  //        字号相关的自适应部分必须由 readerLayout() 算好再绑到行内 style 上。
   if (isGame) {
     const expectRule = (selector, expectations) => {
       const rule = styleRuleBySelector.get(selector)
@@ -762,44 +763,101 @@ function checkPage(pageName) {
         else if (actual !== expected) e(`${selector} ${prop}=${actual}px，期望 ${expected}px（layout.js）`)
       }
     }
-    expectRule('.panel', { left: LAYOUT.PANEL.round.left, width: LAYOUT.PANEL.round.width, height: LAYOUT.PANEL.round.height, bottom: LAYOUT.PANEL.round.bottom, 'border-radius': LAYOUT.PANEL.round.radius })
-    expectRule('.panel.square', { left: LAYOUT.PANEL.square.left, width: LAYOUT.PANEL.square.width, height: LAYOUT.PANEL.square.height, bottom: LAYOUT.PANEL.square.bottom, 'border-radius': LAYOUT.PANEL.square.radius })
-    expectRule('.speaker', { left: LAYOUT.NAME.round.left, width: LAYOUT.NAME.round.width, height: LAYOUT.NAME.round.height, bottom: LAYOUT.NAME.round.bottom })
-    expectRule('.speaker.square', { left: LAYOUT.NAME.square.left, width: LAYOUT.NAME.square.width, height: LAYOUT.NAME.square.height, bottom: LAYOUT.NAME.square.bottom })
-    expectRule('.line', { left: LAYOUT.TEXT.round.left, width: LAYOUT.TEXT.round.width, height: LAYOUT.TEXT.round.height, bottom: LAYOUT.TEXT.round.bottom })
-    expectRule('.line.square', { left: LAYOUT.TEXT.square.left, width: LAYOUT.TEXT.square.width, bottom: LAYOUT.TEXT.square.bottom })
+    const DEFAULT_SIZE = 20
+    const L20 = {
+      round: LAYOUT.readerLayout(DEFAULT_SIZE, 'round'),
+      square: LAYOUT.readerLayout(DEFAULT_SIZE, 'square'),
+    }
+    const P = LAYOUT.PANEL
+    const T = LAYOUT.TEXT
+    const N = LAYOUT.NAME
+    expectRule('.panel', { left: P.round.left, width: P.round.width, height: L20.round.panelHeight, bottom: P.round.bottom, 'border-radius': P.round.radius })
+    expectRule('.panel.square', { left: P.square.left, width: P.square.width, height: L20.square.panelHeight, bottom: P.square.bottom, 'border-radius': P.square.radius })
+    expectRule('.speaker', { left: N.round.left, width: N.round.width, height: N.round.height, bottom: L20.round.nameBottom })
+    expectRule('.speaker.square', { left: N.square.left, width: N.square.width, height: N.square.height, bottom: L20.square.nameBottom })
+    expectRule('.line', { left: T.round.left, width: T.round.width, height: L20.round.textHeight, bottom: T.round.bottom })
+    expectRule('.line.square', { left: T.square.left, width: T.square.width, height: L20.square.textHeight, bottom: T.square.bottom })
     expectRule('.next-hint', { left: LAYOUT.NEXT_HINT.round.left, bottom: LAYOUT.NEXT_HINT.round.bottom })
     expectRule('.next-hint.square', { left: LAYOUT.NEXT_HINT.square.left, bottom: LAYOUT.NEXT_HINT.square.bottom })
     expectRule('.hud', { left: LAYOUT.HUD.round.left, top: LAYOUT.HUD.round.top, width: LAYOUT.HUD.round.width, height: LAYOUT.HUD.round.height })
     expectRule('.hud.square', { left: LAYOUT.HUD.square.left, top: LAYOUT.HUD.square.top, width: LAYOUT.HUD.square.width, height: LAYOUT.HUD.square.height })
-    expectRule('.menu-fab', { left: LAYOUT.MENU_BTN.round.left, top: LAYOUT.MENU_BTN.round.top, width: LAYOUT.MENU_BTN.round.width, height: LAYOUT.MENU_BTN.round.height, 'border-radius': LAYOUT.MENU_BTN.round.radius })
-    expectRule('.menu-fab.square', { left: LAYOUT.MENU_BTN.square.left, top: LAYOUT.MENU_BTN.square.top, width: LAYOUT.MENU_BTN.square.width, height: LAYOUT.MENU_BTN.square.height, 'border-radius': LAYOUT.MENU_BTN.square.radius })
-    // 圆屏安全区：对白面板与正文块的四角、菜单按钮都必须在半径 215 的圆内
-    const roundPanel = LAYOUT.PANEL.round
-    const panelTop = LAYOUT.VIEWPORT.round - roundPanel.bottom - roundPanel.height
-    for (const [label, x, y] of [
-      ['正文块左上', LAYOUT.TEXT.round.left, LAYOUT.VIEWPORT.round - LAYOUT.TEXT.round.bottom - LAYOUT.TEXT.round.height],
-      ['正文块右下', LAYOUT.TEXT.round.left + LAYOUT.TEXT.round.width, LAYOUT.VIEWPORT.round - LAYOUT.TEXT.round.bottom],
-      ['面板上沿中心', LAYOUT.PANEL.round.left + roundPanel.width / 2, panelTop],
-      ['菜单按钮右上', LAYOUT.MENU_BTN.round.left + LAYOUT.MENU_BTN.round.width, LAYOUT.MENU_BTN.round.top],
-    ]) {
-      const dx = x - 233
-      const dy = y - 233
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist > 215) e(`${label} 超出圆屏安全半径 215（距离 ${dist.toFixed(1)}）`)
-    }
-    // 对白面板占屏高比例（圆屏）：超过 55% 会明显压住画面
-    const panelRatio = roundPanel.height / LAYOUT.VIEWPORT.round
-    if (panelRatio > 0.55) e(`对白面板占屏高 ${(panelRatio * 100).toFixed(0)}%（>55%），会压住画面`)
-    // 顶部「≡」菜单按钮必须存在（真机反馈：没有菜单入口）
-    if (!/menu-fab/.test(template)) e('Game 页缺少顶部「≡」阅读菜单按钮（class="menu-fab"）')
-    if (!/menu-fab[\s\S]{0,120}?@click\s*=\s*"openMenu"/.test(template) && !/@click\s*=\s*"openMenu"[\s\S]{0,120}?menu-fab/.test(template)) {
-      e('顶部「≡」菜单按钮必须绑定 @click="openMenu"')
-    }
     expectRule('.sp', { width: LAYOUT.SPRITE.width, height: LAYOUT.SPRITE.height, bottom: 0 })
     expectRule('.sp-l', { left: LAYOUT.SPRITE.left })
     expectRule('.sp-c', { left: LAYOUT.SPRITE.center })
     expectRule('.sp-r', { left: LAYOUT.SPRITE.right })
+
+    // F1. 自适应必须绑定行内 style（字号相关的高度不许再写死在 CSS 里）
+    for (const [selector, exprs] of [
+      ['.line', ['lineStyle']],
+      ['.panel', ['panelStyle']],
+      ['.speaker', ['nameStyle']],
+    ]) {
+      const rule = styleRuleBySelector.get(selector)
+      const bound = rule && exprs.some((name) => new RegExp(`style\\s*=\\s*"\\{\\{\\s*${name}\\s*\\}\\}"`).test(template))
+      if (!bound) e(`${selector} 必须绑定行内 style（${exprs.map((n) => `style="{{ ${n} }}"`).join(' / ')}），否则字号变化后版面不刷新`)
+    }
+
+    // F2. 圆屏安全区：所有字号下正文块四角、面板上沿、说话人条、顶栏都必须在安全圆内
+    const circle = LAYOUT.SAFE_CIRCLE
+    const distToCenter = (x, y) => Math.sqrt((x - circle.cx) * (x - circle.cx) + (y - circle.cy) * (y - circle.cy))
+    const vh = LAYOUT.VIEWPORT.round
+    let worstRatio = 0
+    for (let size = LAYOUT.SIZE_MIN; size <= LAYOUT.SIZE_MAX; size += 1) {
+      const g = LAYOUT.readerLayout(size, 'round')
+      const textTop = vh - g.textBottom - g.textHeight
+      const nameTop = vh - g.nameBottom - g.nameHeight
+      const points = [
+        ['正文块左上', g.textLeft, textTop],
+        ['正文块右上', g.textLeft + g.textWidth, textTop],
+        ['正文块左下', g.textLeft, textTop + g.textHeight],
+        ['正文块右下', g.textLeft + g.textWidth, textTop + g.textHeight],
+        ['面板上沿左', g.panelLeft, g.panelTop],
+        ['面板上沿右', g.panelLeft + g.panelWidth, g.panelTop],
+        ['说话人左上', g.nameLeft, nameTop],
+        ['说话人右上', g.nameLeft + g.nameWidth, nameTop],
+        ['顶栏左上', LAYOUT.HUD.round.left, LAYOUT.HUD.round.top],
+        ['顶栏右上', LAYOUT.HUD.round.left + LAYOUT.HUD.round.width, LAYOUT.HUD.round.top],
+      ]
+      for (const [label, x, y] of points) {
+        const dist = distToCenter(x, y)
+        if (dist > circle.r) e(`字号 ${size} 的${label}超出圆屏安全半径 ${circle.r}（距离 ${dist.toFixed(1)}）`)
+      }
+      worstRatio = Math.max(worstRatio, g.panelHeight / vh)
+    }
+    // F3. 对白面板占屏高比例（圆屏）：超过 55% 会明显压住画面
+    if (worstRatio > 0.55) e(`对白面板占屏高 ${(worstRatio * 100).toFixed(0)}%（>55%），会压住画面`)
+
+    // F4. 分页与渲染同源：textHeight 必须正好装下 linesPerPage 行，且不超过可用高度
+    for (const shape of ['round', 'square']) {
+      for (let size = LAYOUT.SIZE_MIN; size <= LAYOUT.SIZE_MAX; size += 1) {
+        const g = LAYOUT.readerLayout(size, shape)
+        if (g.textHeight !== g.linesPerPage * g.lineHeight) e(`${shape}/${size}px：textHeight=${g.textHeight} != 行数×行高=${g.linesPerPage * g.lineHeight}（会裁字）`)
+        if (g.textHeight > g.textMaxHeight) e(`${shape}/${size}px：textHeight=${g.textHeight} 超过可用高度 ${g.textMaxHeight}`)
+        if (g.panelHeight !== g.padTop + g.textHeight + g.padBottom) {
+          e(`${shape}/${size}px：面板高度 ${g.panelHeight} != 上留白+正文+下留白=${g.padTop + g.textHeight + g.padBottom}（正文会顶出面板）`)
+        }
+      }
+    }
+
+    // F5. 阅读菜单入口：顶部「≡」按钮已按真机反馈移除，必须由手势/返回键打开菜单
+    if (/menu-fab/.test(template)) e('Game 页仍带顶部「≡」阅读菜单按钮（真机反馈遮挡字幕，已移除）')
+    if (!/openMenu\s*\(\)/.test(script)) e('Game 页缺少 openMenu() 调用（菜单将无法打开）')
+
+    // F6. 禁止嵌套定位容器：真机会把「absolute 子元素套在定位容器里」的宽度按密度
+    //     二次换算（参考工程实机 real/sim≈0.46），菜单/选项按钮会全部挤在一起。
+    const pageNode = root.children[0]
+    const directChildren = new Set(pageNode ? pageNode.children : [])
+    for (const node of allNodes) {
+      if (node === root) continue
+      if (directChildren.has(node)) continue
+      for (const cls of classListOf(node)) {
+        const rule = styleRuleBySelector.get('.' + cls)
+        if (rule && rule.decls.position && /^(absolute|fixed)$/i.test(rule.decls.position)) {
+          e(`${'.' + cls}（第 ${node.line} 行）是定位元素，必须直接挂在 .page 下（禁止嵌套定位容器）`)
+          break
+        }
+      }
+    }
   }
 
   // ---- H. About 版本号

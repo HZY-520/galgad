@@ -880,8 +880,8 @@ async function testSettings(env) {
   check(p.sizeText === '22', '读回字号 22', p.sizeText)
   check(p.speedText === '瞬间', 'speed=0 → 「瞬间」', p.speedText)
   check(p.autoText === '关闭', 'autoMs=0 → 「关闭」', p.autoText)
-  check(p.pvStyle === 'font-size: 22px; line-height: 26px;',
-    '预览行内样式随字号（22px / 行高 26px）', p.pvStyle)
+  check(p.pvStyle === 'font-size: 22px; line-height: 31px;',
+    '预览行内样式随字号（22px / 行高 round(22×1.4)=31px）', p.pvStyle)
   check(p.rowKeep.length === 2 && p.rowKeep[0].t === '关' && p.rowKeep[1].t === '开' &&
     p.rowKeep[1].cls === 'pill-on' && p.rowKeep[0].cls === 'pill',
     '屏幕常亮：keepOn=true → 「开」选中',
@@ -914,8 +914,8 @@ async function testSettings(env) {
     check(p.sizeText === '14', '字号下限夹到 14', p.sizeText)
     for (let i = 0; i < 40; i += 1) p.incSize()
     check(p.sizeText === '30', '字号上限夹到 30', p.sizeText)
-    check(p.pvStyle === 'font-size: 30px; line-height: 34px;',
-      '字号 30 时预览行高 34', p.pvStyle)
+    check(p.pvStyle === 'font-size: 30px; line-height: 42px;',
+      '字号 30 时预览行高 round(30×1.4)=42px', p.pvStyle)
   })
   check(!err, '字号步进不抛异常')
   err = guard('Settings 速度边界', () => {
